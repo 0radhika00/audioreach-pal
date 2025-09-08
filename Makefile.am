@@ -161,10 +161,14 @@ libpal_la_list      = ./configs/qcm6490/mixer_paths_qcm6490_idp.xml \
                       ./configs/qcm6490/usecaseKvManager.xml \
                       ./configs/qcm6490/mixer_paths_qcm6490_rb3_ia.xml \
                       ./configs/qcm6490/resourcemanager_qcm6490_rb3_ia.xml \
-                      ./configs/qcs8300/mixer_paths_qcs8300_ridesx.xml \
-                      ./configs/qcs8300/resourcemanager_qcs8300_ridesx.xml \
+                      ./configs/qcs8300/mixer_paths_MONACO_EVK.xml \
+                      ./configs/qcs8300/resourcemanager_MONACO_EVK.xml \
                       ./configs/qcs9100/mixer_paths_qcs9100_ridesx.xml \
-                      ./configs/qcs9100/resourcemanager_qcs9100_ridesx.xml
+                      ./configs/qcs9100/resourcemanager_qcs9100_ridesx.xml \
+                      ./configs/qcs6490/mixer_paths_QCS6490_RB3Gen2.xml \
+                      ./configs/qcs6490/resourcemanager_QCS6490_RB3Gen2.xml \
+                      ./configs/qcs9075/mixer_paths_LEMANS_EVK.xml \
+                      ./configs/qcs9075/resourcemanager_LEMANS_EVK.xml
 
 lib_LTLIBRARIES     += lib_bt_bundle.la
 lib_bt_bundle_la_SOURCES   = $(btbundle_plugin_sources)
@@ -192,8 +196,8 @@ endif
 root_etcdir      = "/etc"
 root_etc_SCRIPTS = $(libpal_la_list)
 install-data-hook:
-	chmod  go+r $(DESTDIR)$(root_etcdir)/mixer_paths_qcs8300_ridesx.xml
-	chmod  go+r $(DESTDIR)$(root_etcdir)/resourcemanager_qcs8300_ridesx.xml
+	chmod  go+r $(DESTDIR)$(root_etcdir)/mixer_paths_MONACO_EVK.xml
+	chmod  go+r $(DESTDIR)$(root_etcdir)/resourcemanager_MONACO_EVK.xml
 	chmod  go+r $(DESTDIR)$(root_etcdir)/mixer_paths_qcs9100_ridesx.xml
 	chmod  go+r $(DESTDIR)$(root_etcdir)/resourcemanager_qcs9100_ridesx.xml
 	chmod  go+r $(DESTDIR)$(root_etcdir)/mixer_paths_qcm6490_idp.xml
@@ -207,6 +211,10 @@ install-data-hook:
 	chmod  go+r $(DESTDIR)$(root_etcdir)/usecaseKvManager.xml
 	chmod  go+r $(DESTDIR)$(root_etcdir)/mixer_paths_qcm6490_rb3_ia.xml
 	chmod  go+r $(DESTDIR)$(root_etcdir)/resourcemanager_qcm6490_rb3_ia.xml
+	chmod  go+r $(DESTDIR)$(root_etcdir)/mixer_paths_QCS6490_RB3Gen2.xml
+	chmod  go+r $(DESTDIR)$(root_etcdir)/resourcemanager_QCS6490_RB3Gen2.xml
+	chmod  go+r $(DESTDIR)$(root_etcdir)/mixer_paths_LEMANS_EVK.xml
+	chmod  go+r $(DESTDIR)$(root_etcdir)/resourcemanager_LEMANS_EVK.xml
 
 if COMPILE_ADSPRPCD
 adsprpc_sources = adsprpcd/adsprpcd.c
