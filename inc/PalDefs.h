@@ -26,8 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center, Inc. are provided under the following license:
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -45,12 +45,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
-
+#include "PalARDefs.h"
 #ifdef __cplusplus
 
 #include <map>
 #include <string>
-
+#include <set>
 extern "C" {
 #endif
 
@@ -58,8 +58,10 @@ extern "C" {
 #define PAL_MAX_CHANNELS_SUPPORTED 64
 #define MAX_KEYWORD_SUPPORTED 8
 #define PAL_MAX_LATENCY_MODES 8
+#define PAL_CUSTOM_PARAM_MAX_STRING_LENGTH 64
 
 #define PAL_VERSION "1.0"
+#define PAL_MAX_SOUND_DOSE_VALUES 10
 
 /** Audio stream handle */
 typedef uint64_t pal_stream_handle_t;
@@ -102,43 +104,18 @@ typedef enum {
     PAL_AUDIO_FMT_COMPRESSED_RANGE_END   = PAL_AUDIO_FMT_COMPRESSED_EXTENDED_RANGE_END /* Reserved for beginning of 3rd party codecs */
 } pal_audio_fmt_t;
 
+typedef enum {
+    PAL_NOTIFY_CALL_TRANSLATION_TEXT = 0,
+    PAL_NOTIFY_START,
+    PAL_NOTIFY_STOP,
+    PAL_NOTIFY_DEVICESWITCH
+} pal_notification_t;
+
 #define PCM_24_BIT_PACKED (0x6u)
 #define PCM_32_BIT (0x3u)
 #define PCM_16_BIT (0x1u)
 
 #define SAMPLE_RATE_192000 192000
-
-#ifdef __cplusplus
-static const std::map<std::string, pal_audio_fmt_t> PalAudioFormatMap
-{
-    { "PCM",  PAL_AUDIO_FMT_PCM_S16_LE},
-    { "PCM_S8",  PAL_AUDIO_FMT_PCM_S8},
-    { "PCM_S16_LE",  PAL_AUDIO_FMT_PCM_S16_LE},
-    { "PCM_S24_3LE",  PAL_AUDIO_FMT_PCM_S24_3LE},
-    { "PCM_S24_LE",  PAL_AUDIO_FMT_PCM_S24_LE},
-    { "PCM_S32_LE",  PAL_AUDIO_FMT_PCM_S32_LE},
-    { "MP3",  PAL_AUDIO_FMT_MP3},
-    { "AAC",  PAL_AUDIO_FMT_AAC},
-    { "AAC_ADTS",  PAL_AUDIO_FMT_AAC_ADTS},
-    { "AAC_ADIF",  PAL_AUDIO_FMT_AAC_ADIF},
-    { "AAC_LATM",  PAL_AUDIO_FMT_AAC_LATM},
-    { "WMA_STD",  PAL_AUDIO_FMT_WMA_STD},
-    { "ALAC", PAL_AUDIO_FMT_ALAC},
-    { "APE", PAL_AUDIO_FMT_APE},
-    { "WMA_PRO", PAL_AUDIO_FMT_WMA_PRO},
-    { "FLAC", PAL_AUDIO_FMT_FLAC},
-    { "FLAC_OGG", PAL_AUDIO_FMT_FLAC_OGG},
-    { "VORBIS", PAL_AUDIO_FMT_VORBIS},
-    { "AMR_NB", PAL_AUDIO_FMT_AMR_NB},
-    { "AMR_WB", PAL_AUDIO_FMT_AMR_WB},
-    { "AMR_WB_PLUS", PAL_AUDIO_FMT_AMR_WB_PLUS},
-    { "EVRC", PAL_AUDIO_FMT_EVRC},
-    { "G711", PAL_AUDIO_FMT_G711},
-    { "QCELP", PAL_AUDIO_FMT_QCELP},
-    { "OPUS", PAL_AUDIO_FMT_OPUS}
-
-};
-#endif
 
 struct aac_enc_cfg {
     uint16_t aac_enc_mode; /**< AAC encoder mode */
@@ -221,32 +198,20 @@ struct pal_snd_dec_opus {
     uint8_t channel_map[8];
 };
 
-typedef struct pal_key_value_pair_s {
-    uint32_t key; /**< key */
-    uint32_t value; /**< value */
-} pal_key_value_pair_t;
 
-typedef struct pal_key_vector_s {
-    size_t num_tkvs;  /**< number of key value pairs */
-    pal_key_value_pair_t kvp[];  /**< vector of key value pairs */
-} pal_key_vector_t;
 
+/* Type of Modes for Haptics Device Protection */
 typedef enum {
-    PARAM_NONTKV,
-    PARAM_TKV,
-} pal_param_type_t;
+    PAL_HAP_MODE_DYNAMIC_CAL = 1,
+    PAL_HAP_MODE_FACTORY_TEST,
+} pal_haptics_mode;
 
-typedef struct pal_effect_custom_payload_s {
-    uint32_t paramId;
-    uint32_t data[];
-} pal_effect_custom_payload_t;
-
-typedef struct effect_pal_payload_s {
-    pal_param_type_t isTKV;      /* payload type: 0->non-tkv 1->tkv*/
-    uint32_t tag;
-    uint32_t  payloadSize;
-    uint32_t  payload[]; /* TKV uses pal_key_vector_t, while nonTKV uses pal_effect_custom_payload_t */
-} effect_pal_payload_t;
+/* Payload For ID: PAL_PARAM_ID_HAPTICS_MODE
+ * Description   : Values for haptics modes
+ */
+typedef struct pal_haptics_payload {
+    pal_haptics_mode operationMode;/* Type of mode for which request is raised */
+} pal_haptics_payload;
 
 /* Type of Modes for Speaker Protection */
 typedef enum {
@@ -268,10 +233,10 @@ typedef struct pal_spkr_prot_payload {
     pal_spkr_prot_mode operationMode;/* Type of mode for which request is raised */
 } pal_spkr_prot_payload;
 
-typedef enum {
-    GEF_PARAM_READ = 0,
-    GEF_PARAM_WRITE,
-} gef_param_rw_t;
+enum {
+    SPKR_RIGHT,    /* Right Speaker */
+    SPKR_LEFT,     /* Left Speaker */
+};
 
 /** Audio parameter data*/
 typedef union {
@@ -294,12 +259,6 @@ typedef struct pal_param_payload_s {
     uint32_t payload_size;
     uint8_t payload[];
 } pal_param_payload;
-
-typedef struct gef_payload_s {
-    pal_key_vector_t *graph;
-    bool persist;
-    effect_pal_payload_t data;
-} gef_payload_t;
 
 typedef enum {
     LPI_VOTE,
@@ -401,6 +360,12 @@ typedef enum {
     PAL_STREAM_SPATIAL_AUDIO = 27,        /**< Spatial audio playback */
     PAL_STREAM_COMMON_PROXY = 28,         /**< AFS's WakeUp Algo library detection */
     PAL_STREAM_SENSOR_PCM_RENDERER = 29,  /**< Sensor Pcm Rendering Stream */
+    PAL_STREAM_ASR = 30,                  /**< ASR Stream */
+    PAL_STREAM_HPCM = 31,                 /**< hpcm usecase */
+    PAL_STREAM_DUMMY = 32,                /**< Dummy stream used to directly push configurations without a stream instance */
+    PAL_STREAM_CALL_TRANSLATION = 33,     /**< Translation usecase for Voice & Voip Calls */
+    PAL_STREAM_PLAYBACK_BUS = 34,         /**< Playback bus type pal streams */
+    PAL_STREAM_CAPTURE_BUS = 35,          /**< Capture bus type pal streams */
     PAL_STREAM_MAX,                       /**< max stream types - add new ones above */
 } pal_stream_type_t;
 
@@ -408,11 +373,11 @@ typedef enum {
 typedef enum {
     //OUTPUT DEVICES
     PAL_DEVICE_OUT_MIN = 0,
-    PAL_DEVICE_NONE = 1, /**< for transcode usecases*/
+    PAL_DEVICE_NONE = 1,                           /**< for transcode usecases*/
     PAL_DEVICE_OUT_HANDSET = 2,
-    PAL_DEVICE_OUT_SPEAKER = 3,
+    PAL_DEVICE_OUT_SPEAKER = 3,                    /**< Default out speaker device*/
     PAL_DEVICE_OUT_WIRED_HEADSET = 4,
-    PAL_DEVICE_OUT_WIRED_HEADPHONE = 5, /**< Wired headphones without mic*/
+    PAL_DEVICE_OUT_WIRED_HEADPHONE = 5,            /**< Wired headphones without mic*/
     PAL_DEVICE_OUT_LINE = 6,
     PAL_DEVICE_OUT_BLUETOOTH_SCO = 7,
     PAL_DEVICE_OUT_BLUETOOTH_A2DP = 8,
@@ -433,8 +398,12 @@ typedef enum {
     PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST = 23,
     PAL_DEVICE_OUT_DUMMY = 24,
     PAL_DEVICE_OUT_RECORD_PROXY = 25,
+    PAL_DEVICE_OUT_SOUND_DOSE = 26,
+    PAL_DEVICE_OUT_BLUETOOTH_HFP = 27,
+    PAL_DEVICE_OUT_SPEAKER2 = 28,                  /**< Secondary zone speaker device*/
+    PAL_DEVICE_OUT_SPEAKER3 = 29,                  /**< Tertiary zone speaker device*/
     // Add new OUT devices here, increment MAX and MIN below when you do so
-    PAL_DEVICE_OUT_MAX = 26,
+    PAL_DEVICE_OUT_MAX = 30,
     //INPUT DEVICES
     PAL_DEVICE_IN_MIN = PAL_DEVICE_OUT_MAX,
     PAL_DEVICE_IN_HANDSET_MIC = PAL_DEVICE_IN_MIN +1,
@@ -464,9 +433,19 @@ typedef enum {
     PAL_DEVICE_IN_DUMMY = PAL_DEVICE_IN_MIN + 25,
     PAL_DEVICE_IN_CPS2_FEEDBACK = PAL_DEVICE_IN_MIN + 26,
     PAL_DEVICE_IN_RECORD_PROXY = PAL_DEVICE_IN_MIN + 27,
+    PAL_DEVICE_IN_BLUETOOTH_HFP = PAL_DEVICE_IN_MIN + 28,
+    PAL_DEVICE_IN_SPEAKER_MIC2 = PAL_DEVICE_IN_MIN + 29,             /**< Secondary zone speaker mic device*/
+    PAL_DEVICE_IN_SPEAKER_MIC3 = PAL_DEVICE_IN_MIN + 30,             /**< Tertiary zone speaker mic device*/
     // Add new IN devices here, increment MAX and MIN below when you do so
-    PAL_DEVICE_IN_MAX = PAL_DEVICE_IN_MIN + 28,
+    PAL_DEVICE_IN_MAX = PAL_DEVICE_IN_MIN + 31,
 } pal_device_id_t;
+
+enum A2DP_STATE {
+    A2DP_STATE_CONNECTED,
+    A2DP_STATE_STARTED,
+    A2DP_STATE_STOPPED,
+    A2DP_STATE_DISCONNECTED,
+};
 
 typedef enum {
     VOICEMMODE1 = 0x11C05000,
@@ -484,6 +463,7 @@ typedef enum {
     PAL_STREAM_LOOPBACK_KARAOKE,
     PAL_STREAM_LOOPBACK_PLAYBACK_ONLY,
     PAL_STREAM_LOOPBACK_CAPTURE_ONLY,
+    PAL_STREAM_LOOPBACK_ICC,           /**< In Car Communication loopback */
 } pal_stream_loopback_type_t;
 
 typedef enum {
@@ -499,225 +479,46 @@ typedef enum {
 typedef enum {
     PAL_STREAM_HAPTICS_RINGTONE,
     PAL_STREAM_HAPTICS_TOUCH = 1,
+    PAL_STREAM_HAPTICS_PCM = 2,
 } pal_stream_haptics_type_t;
-
 #ifdef __cplusplus
-static const std::map<std::string, pal_device_id_t> deviceIdLUT {
-    {std::string{ "PAL_DEVICE_OUT_MIN" },                  PAL_DEVICE_OUT_MIN},
-    {std::string{ "PAL_DEVICE_NONE" },                     PAL_DEVICE_NONE},
-    {std::string{ "PAL_DEVICE_OUT_HANDSET" },              PAL_DEVICE_OUT_HANDSET},
-    {std::string{ "PAL_DEVICE_OUT_SPEAKER" },              PAL_DEVICE_OUT_SPEAKER},
-    {std::string{ "PAL_DEVICE_OUT_WIRED_HEADSET" },        PAL_DEVICE_OUT_WIRED_HEADSET},
-    {std::string{ "PAL_DEVICE_OUT_WIRED_HEADPHONE" },      PAL_DEVICE_OUT_WIRED_HEADPHONE},
-    {std::string{ "PAL_DEVICE_OUT_LINE" },                 PAL_DEVICE_OUT_LINE},
-    {std::string{ "PAL_DEVICE_OUT_BLUETOOTH_SCO" },        PAL_DEVICE_OUT_BLUETOOTH_SCO},
-    {std::string{ "PAL_DEVICE_OUT_BLUETOOTH_A2DP" },       PAL_DEVICE_OUT_BLUETOOTH_A2DP},
-    {std::string{ "PAL_DEVICE_OUT_BLUETOOTH_BLE" },        PAL_DEVICE_OUT_BLUETOOTH_BLE},
-    {std::string{ "PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST" }, PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST},
-    {std::string{ "PAL_DEVICE_OUT_AUX_DIGITAL" },          PAL_DEVICE_OUT_AUX_DIGITAL},
-    {std::string{ "PAL_DEVICE_OUT_HDMI" },                 PAL_DEVICE_OUT_HDMI},
-    {std::string{ "PAL_DEVICE_OUT_USB_DEVICE" },           PAL_DEVICE_OUT_USB_DEVICE},
-    {std::string{ "PAL_DEVICE_OUT_USB_HEADSET" },          PAL_DEVICE_OUT_USB_HEADSET},
-    {std::string{ "PAL_DEVICE_OUT_SPDIF" },                PAL_DEVICE_OUT_SPDIF},
-    {std::string{ "PAL_DEVICE_OUT_FM" },                   PAL_DEVICE_OUT_FM},
-    {std::string{ "PAL_DEVICE_OUT_AUX_LINE" },             PAL_DEVICE_OUT_AUX_LINE},
-    {std::string{ "PAL_DEVICE_OUT_PROXY" },                PAL_DEVICE_OUT_PROXY},
-    {std::string{ "PAL_DEVICE_OUT_RECORD_PROXY" },         PAL_DEVICE_OUT_RECORD_PROXY},
-    {std::string{ "PAL_DEVICE_OUT_AUX_DIGITAL_1" },        PAL_DEVICE_OUT_AUX_DIGITAL_1},
-    {std::string{ "PAL_DEVICE_OUT_HEARING_AID" },          PAL_DEVICE_OUT_HEARING_AID},
-    {std::string{ "PAL_DEVICE_OUT_HAPTICS_DEVICE" },       PAL_DEVICE_OUT_HAPTICS_DEVICE},
-    {std::string{ "PAL_DEVICE_OUT_ULTRASOUND" },           PAL_DEVICE_OUT_ULTRASOUND},
-    {std::string{ "PAL_DEVICE_OUT_ULTRASOUND_DEDICATED" }, PAL_DEVICE_OUT_ULTRASOUND_DEDICATED},
-    {std::string{ "PAL_DEVICE_OUT_DUMMY" },                PAL_DEVICE_OUT_DUMMY},
-    {std::string{ "PAL_DEVICE_OUT_MAX" },                  PAL_DEVICE_OUT_MAX},
-    {std::string{ "PAL_DEVICE_IN_HANDSET_MIC" },           PAL_DEVICE_IN_HANDSET_MIC},
-    {std::string{ "PAL_DEVICE_IN_SPEAKER_MIC" },           PAL_DEVICE_IN_SPEAKER_MIC},
-    {std::string{ "PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET" }, PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET},
-    {std::string{ "PAL_DEVICE_IN_WIRED_HEADSET" },         PAL_DEVICE_IN_WIRED_HEADSET},
-    {std::string{ "PAL_DEVICE_IN_AUX_DIGITAL" },           PAL_DEVICE_IN_AUX_DIGITAL},
-    {std::string{ "PAL_DEVICE_IN_HDMI" },                  PAL_DEVICE_IN_HDMI},
-    {std::string{ "PAL_DEVICE_IN_USB_ACCESSORY" },         PAL_DEVICE_IN_USB_ACCESSORY},
-    {std::string{ "PAL_DEVICE_IN_USB_DEVICE" },            PAL_DEVICE_IN_USB_DEVICE},
-    {std::string{ "PAL_DEVICE_IN_USB_HEADSET" },           PAL_DEVICE_IN_USB_HEADSET},
-    {std::string{ "PAL_DEVICE_IN_FM_TUNER" },              PAL_DEVICE_IN_FM_TUNER},
-    {std::string{ "PAL_DEVICE_IN_LINE" },                  PAL_DEVICE_IN_LINE},
-    {std::string{ "PAL_DEVICE_IN_SPDIF" },                 PAL_DEVICE_IN_SPDIF},
-    {std::string{ "PAL_DEVICE_IN_PROXY" },                 PAL_DEVICE_IN_PROXY},
-    {std::string{ "PAL_DEVICE_IN_RECORD_PROXY" },          PAL_DEVICE_IN_RECORD_PROXY},
-    {std::string{ "PAL_DEVICE_IN_HANDSET_VA_MIC" },        PAL_DEVICE_IN_HANDSET_VA_MIC},
-    {std::string{ "PAL_DEVICE_IN_BLUETOOTH_A2DP" },        PAL_DEVICE_IN_BLUETOOTH_A2DP},
-    {std::string{ "PAL_DEVICE_IN_BLUETOOTH_BLE" },         PAL_DEVICE_IN_BLUETOOTH_BLE},
-    {std::string{ "PAL_DEVICE_IN_HEADSET_VA_MIC" },        PAL_DEVICE_IN_HEADSET_VA_MIC},
-    {std::string{ "PAL_DEVICE_IN_VI_FEEDBACK" },           PAL_DEVICE_IN_VI_FEEDBACK},
-    {std::string{ "PAL_DEVICE_IN_TELEPHONY_RX" },          PAL_DEVICE_IN_TELEPHONY_RX},
-    {std::string{ "PAL_DEVICE_IN_ULTRASOUND_MIC" },        PAL_DEVICE_IN_ULTRASOUND_MIC},
-    {std::string{ "PAL_DEVICE_IN_EXT_EC_REF" },            PAL_DEVICE_IN_EXT_EC_REF},
-    {std::string{ "PAL_DEVICE_IN_ECHO_REF" },              PAL_DEVICE_IN_ECHO_REF},
-    {std::string{ "PAL_DEVICE_IN_HAPTICS_VI_FEEDBACK" },   PAL_DEVICE_IN_HAPTICS_VI_FEEDBACK},
-    {std::string{ "PAL_DEVICE_IN_CPS_FEEDBACK" },          PAL_DEVICE_IN_CPS_FEEDBACK},
-    {std::string{ "PAL_DEVICE_IN_DUMMY" },                 PAL_DEVICE_IN_DUMMY},
+const std::set<pal_device_id_t> pluginDeviceList {
+    PAL_DEVICE_OUT_USB_DEVICE,
+    PAL_DEVICE_OUT_USB_HEADSET,
+    PAL_DEVICE_OUT_WIRED_HEADPHONE,
+    PAL_DEVICE_OUT_WIRED_HEADSET,
+    PAL_DEVICE_OUT_BLUETOOTH_A2DP,
+    PAL_DEVICE_OUT_BLUETOOTH_BLE,
+    PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST,
+    PAL_DEVICE_OUT_BLUETOOTH_SCO,
+    PAL_DEVICE_OUT_PROXY,
+    PAL_DEVICE_OUT_AUX_DIGITAL,
+    PAL_DEVICE_OUT_AUX_DIGITAL_1,
+    PAL_DEVICE_OUT_HDMI
 };
 
-//reverse mapping
-static const std::map<uint32_t, std::string> deviceNameLUT {
-    {PAL_DEVICE_OUT_MIN,                  std::string{"PAL_DEVICE_OUT_MIN"}},
-    {PAL_DEVICE_NONE,                     std::string{"PAL_DEVICE_NONE"}},
-    {PAL_DEVICE_OUT_HANDSET,              std::string{"PAL_DEVICE_OUT_HANDSET"}},
-    {PAL_DEVICE_OUT_SPEAKER,              std::string{"PAL_DEVICE_OUT_SPEAKER"}},
-    {PAL_DEVICE_OUT_WIRED_HEADSET,        std::string{"PAL_DEVICE_OUT_WIRED_HEADSET"}},
-    {PAL_DEVICE_OUT_WIRED_HEADPHONE,      std::string{"PAL_DEVICE_OUT_WIRED_HEADPHONE"}},
-    {PAL_DEVICE_OUT_LINE,                 std::string{"PAL_DEVICE_OUT_LINE"}},
-    {PAL_DEVICE_OUT_BLUETOOTH_SCO,        std::string{"PAL_DEVICE_OUT_BLUETOOTH_SCO"}},
-    {PAL_DEVICE_OUT_BLUETOOTH_A2DP,       std::string{"PAL_DEVICE_OUT_BLUETOOTH_A2DP"}},
-    {PAL_DEVICE_OUT_BLUETOOTH_BLE,        std::string{"PAL_DEVICE_OUT_BLUETOOTH_BLE"}},
-    {PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST, std::string{"PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST"}},
-    {PAL_DEVICE_OUT_AUX_DIGITAL,          std::string{"PAL_DEVICE_OUT_AUX_DIGITAL"}},
-    {PAL_DEVICE_OUT_HDMI,                 std::string{"PAL_DEVICE_OUT_HDMI"}},
-    {PAL_DEVICE_OUT_USB_DEVICE,           std::string{"PAL_DEVICE_OUT_USB_DEVICE"}},
-    {PAL_DEVICE_OUT_USB_HEADSET,          std::string{"PAL_DEVICE_OUT_USB_HEADSET"}},
-    {PAL_DEVICE_OUT_SPDIF,                std::string{"PAL_DEVICE_OUT_SPDIF"}},
-    {PAL_DEVICE_OUT_FM,                   std::string{"PAL_DEVICE_OUT_FM"}},
-    {PAL_DEVICE_OUT_AUX_LINE,             std::string{"PAL_DEVICE_OUT_AUX_LINE"}},
-    {PAL_DEVICE_OUT_PROXY,                std::string{"PAL_DEVICE_OUT_PROXY"}},
-    {PAL_DEVICE_OUT_RECORD_PROXY,         std::string{"PAL_DEVICE_OUT_RECORD_PROXY"}},
-    {PAL_DEVICE_OUT_AUX_DIGITAL_1,        std::string{"PAL_DEVICE_OUT_AUX_DIGITAL_1"}},
-    {PAL_DEVICE_OUT_HEARING_AID,          std::string{"PAL_DEVICE_OUT_HEARING_AID"}},
-    {PAL_DEVICE_OUT_HAPTICS_DEVICE,       std::string{"PAL_DEVICE_OUT_HAPTICS_DEVICE"}},
-    {PAL_DEVICE_OUT_ULTRASOUND,           std::string{"PAL_DEVICE_OUT_ULTRASOUND"}},
-    {PAL_DEVICE_OUT_ULTRASOUND_DEDICATED, std::string{"PAL_DEVICE_OUT_ULTRASOUND_DEDICATED"}},
-    {PAL_DEVICE_OUT_DUMMY,                std::string{"PAL_DEVICE_OUT_DUMMY"}},
-    {PAL_DEVICE_OUT_MAX,                  std::string{"PAL_DEVICE_OUT_MAX"}},
-    {PAL_DEVICE_IN_HANDSET_MIC,           std::string{"PAL_DEVICE_IN_HANDSET_MIC"}},
-    {PAL_DEVICE_IN_SPEAKER_MIC,           std::string{"PAL_DEVICE_IN_SPEAKER_MIC"}},
-    {PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET, std::string{"PAL_DEVICE_IN_BLUETOOTH_SCO_HEADSET"}},
-    {PAL_DEVICE_IN_WIRED_HEADSET,         std::string{"PAL_DEVICE_IN_WIRED_HEADSET"}},
-    {PAL_DEVICE_IN_AUX_DIGITAL,           std::string{"PAL_DEVICE_IN_AUX_DIGITAL"}},
-    {PAL_DEVICE_IN_HDMI,                  std::string{"PAL_DEVICE_IN_HDMI"}},
-    {PAL_DEVICE_IN_USB_ACCESSORY,         std::string{"PAL_DEVICE_IN_USB_ACCESSORY"}},
-    {PAL_DEVICE_IN_USB_DEVICE,            std::string{"PAL_DEVICE_IN_USB_DEVICE"}},
-    {PAL_DEVICE_IN_USB_HEADSET,           std::string{"PAL_DEVICE_IN_USB_HEADSET"}},
-    {PAL_DEVICE_IN_FM_TUNER,              std::string{"PAL_DEVICE_IN_FM_TUNER"}},
-    {PAL_DEVICE_IN_LINE,                  std::string{"PAL_DEVICE_IN_LINE"}},
-    {PAL_DEVICE_IN_SPDIF,                 std::string{"PAL_DEVICE_IN_SPDIF"}},
-    {PAL_DEVICE_IN_PROXY,                 std::string{"PAL_DEVICE_IN_PROXY"}},
-    {PAL_DEVICE_IN_RECORD_PROXY,          std::string{"PAL_DEVICE_IN_RECORD_PROXY"}},
-    {PAL_DEVICE_IN_HANDSET_VA_MIC,        std::string{"PAL_DEVICE_IN_HANDSET_VA_MIC"}},
-    {PAL_DEVICE_IN_BLUETOOTH_A2DP,        std::string{"PAL_DEVICE_IN_BLUETOOTH_A2DP"}},
-    {PAL_DEVICE_IN_BLUETOOTH_BLE,         std::string{"PAL_DEVICE_IN_BLUETOOTH_BLE"}},
-    {PAL_DEVICE_IN_HEADSET_VA_MIC,        std::string{"PAL_DEVICE_IN_HEADSET_VA_MIC"}},
-    {PAL_DEVICE_IN_VI_FEEDBACK,           std::string{"PAL_DEVICE_IN_VI_FEEDBACK"}},
-    {PAL_DEVICE_IN_TELEPHONY_RX,          std::string{"PAL_DEVICE_IN_TELEPHONY_RX"}},
-    {PAL_DEVICE_IN_ULTRASOUND_MIC,        std::string{"PAL_DEVICE_IN_ULTRASOUND_MIC"}},
-    {PAL_DEVICE_IN_EXT_EC_REF,            std::string{"PAL_DEVICE_IN_EXT_EC_REF"}},
-    {PAL_DEVICE_IN_ECHO_REF,              std::string{"PAL_DEVICE_IN_ECHO_REF"}},
-    {PAL_DEVICE_IN_HAPTICS_VI_FEEDBACK,   std::string{"PAL_DEVICE_IN_HAPTICS_VI_FEEDBACK"}},
-    {PAL_DEVICE_IN_CPS_FEEDBACK,          std::string{"PAL_DEVICE_IN_CPS_FEEDBACK"}},
-    {PAL_DEVICE_IN_DUMMY,                 std::string{"PAL_DEVICE_IN_DUMMY"}},
+const std::set<pal_device_id_t> BTPlaybackDeviceList {
+    PAL_DEVICE_OUT_BLUETOOTH_A2DP,
+    PAL_DEVICE_OUT_BLUETOOTH_BLE,
+    PAL_DEVICE_OUT_BLUETOOTH_BLE_BROADCAST,
+    PAL_DEVICE_OUT_BLUETOOTH_SCO
 };
-
-const std::map<std::string, uint32_t> usecaseIdLUT {
-    {std::string{ "PAL_STREAM_LOW_LATENCY" },              PAL_STREAM_LOW_LATENCY},
-    {std::string{ "PAL_STREAM_DEEP_BUFFER" },              PAL_STREAM_DEEP_BUFFER},
-    {std::string{ "PAL_STREAM_COMPRESSED" },               PAL_STREAM_COMPRESSED},
-    {std::string{ "PAL_STREAM_VOIP" },                     PAL_STREAM_VOIP},
-    {std::string{ "PAL_STREAM_VOIP_RX" },                  PAL_STREAM_VOIP_RX},
-    {std::string{ "PAL_STREAM_VOIP_TX" },                  PAL_STREAM_VOIP_TX},
-    {std::string{ "PAL_STREAM_VOICE_CALL_MUSIC" },         PAL_STREAM_VOICE_CALL_MUSIC},
-    {std::string{ "PAL_STREAM_GENERIC" },                  PAL_STREAM_GENERIC},
-    {std::string{ "PAL_STREAM_RAW" },                      PAL_STREAM_RAW},
-    {std::string{ "PAL_STREAM_VOICE_RECOGNITION" },        PAL_STREAM_VOICE_RECOGNITION},
-    {std::string{ "PAL_STREAM_VOICE_CALL_RECORD" },        PAL_STREAM_VOICE_CALL_RECORD},
-    {std::string{ "PAL_STREAM_VOICE_CALL_TX" },            PAL_STREAM_VOICE_CALL_TX},
-    {std::string{ "PAL_STREAM_VOICE_CALL_RX_TX" },         PAL_STREAM_VOICE_CALL_RX_TX},
-    {std::string{ "PAL_STREAM_VOICE_CALL" },               PAL_STREAM_VOICE_CALL},
-    {std::string{ "PAL_STREAM_LOOPBACK" },                 PAL_STREAM_LOOPBACK},
-    {std::string{ "PAL_STREAM_TRANSCODE" },                PAL_STREAM_TRANSCODE},
-    {std::string{ "PAL_STREAM_VOICE_UI" },                 PAL_STREAM_VOICE_UI},
-    {std::string{ "PAL_STREAM_PCM_OFFLOAD" },              PAL_STREAM_PCM_OFFLOAD},
-    {std::string{ "PAL_STREAM_ULTRA_LOW_LATENCY" },        PAL_STREAM_ULTRA_LOW_LATENCY},
-    {std::string{ "PAL_STREAM_PROXY" },                    PAL_STREAM_PROXY},
-    {std::string{ "PAL_STREAM_NON_TUNNEL" },               PAL_STREAM_NON_TUNNEL},
-    {std::string{ "PAL_STREAM_HAPTICS" },                  PAL_STREAM_HAPTICS},
-    {std::string{ "PAL_STREAM_ACD" },                      PAL_STREAM_ACD},
-    {std::string{ "PAL_STREAM_ULTRASOUND" },               PAL_STREAM_ULTRASOUND},
-    {std::string{ "PAL_STREAM_SENSOR_PCM_DATA" },          PAL_STREAM_SENSOR_PCM_DATA},
-    {std::string{ "PAL_STREAM_SPATIAL_AUDIO" },            PAL_STREAM_SPATIAL_AUDIO},
-    {std::string{ "PAL_STREAM_CONTEXT_PROXY" },            PAL_STREAM_CONTEXT_PROXY},
-    {std::string{ "PAL_STREAM_COMMON_PROXY" },             PAL_STREAM_COMMON_PROXY},
-    {std::string{ "PAL_STREAM_SENSOR_PCM_RENDERER" },      PAL_STREAM_SENSOR_PCM_RENDERER},
-};
-
-/* Update the reverse mapping as well when new stream is added */
-const std::map<uint32_t, std::string> streamNameLUT {
-    {PAL_STREAM_LOW_LATENCY,        std::string{ "PAL_STREAM_LOW_LATENCY" } },
-    {PAL_STREAM_DEEP_BUFFER,        std::string{ "PAL_STREAM_DEEP_BUFFER" } },
-    {PAL_STREAM_COMPRESSED,         std::string{ "PAL_STREAM_COMPRESSED" } },
-    {PAL_STREAM_VOIP,               std::string{ "PAL_STREAM_VOIP" } },
-    {PAL_STREAM_VOIP_RX,            std::string{ "PAL_STREAM_VOIP_RX" } },
-    {PAL_STREAM_VOIP_TX,            std::string{ "PAL_STREAM_VOIP_TX" } },
-    {PAL_STREAM_VOICE_CALL_MUSIC,   std::string{ "PAL_STREAM_VOICE_CALL_MUSIC" } },
-    {PAL_STREAM_GENERIC,            std::string{ "PAL_STREAM_GENERIC" } },
-    {PAL_STREAM_RAW,                std::string{ "PAL_STREAM_RAW" } },
-    {PAL_STREAM_VOICE_RECOGNITION,  std::string{ "PAL_STREAM_VOICE_RECOGNITION" } },
-    {PAL_STREAM_VOICE_CALL_RECORD,  std::string{ "PAL_STREAM_VOICE_CALL_RECORD" } },
-    {PAL_STREAM_VOICE_CALL_TX,      std::string{ "PAL_STREAM_VOICE_CALL_TX" } },
-    {PAL_STREAM_VOICE_CALL_RX_TX,   std::string{ "PAL_STREAM_VOICE_CALL_RX_TX" } },
-    {PAL_STREAM_VOICE_CALL,         std::string{ "PAL_STREAM_VOICE_CALL" } },
-    {PAL_STREAM_LOOPBACK,           std::string{ "PAL_STREAM_LOOPBACK" } },
-    {PAL_STREAM_TRANSCODE,          std::string{ "PAL_STREAM_TRANSCODE" } },
-    {PAL_STREAM_VOICE_UI,           std::string{ "PAL_STREAM_VOICE_UI" } },
-    {PAL_STREAM_PCM_OFFLOAD,        std::string{ "PAL_STREAM_PCM_OFFLOAD" } },
-    {PAL_STREAM_ULTRA_LOW_LATENCY,  std::string{ "PAL_STREAM_ULTRA_LOW_LATENCY" } },
-    {PAL_STREAM_PROXY,              std::string{ "PAL_STREAM_PROXY" } },
-    {PAL_STREAM_NON_TUNNEL,         std::string{ "PAL_STREAM_NON_TUNNEL" } },
-    {PAL_STREAM_HAPTICS,            std::string{ "PAL_STREAM_HAPTICS" } },
-    {PAL_STREAM_CONTEXT_PROXY,      std::string{ "PAL_STREAM_CONTEXT_PROXY" } },
-    {PAL_STREAM_ACD,                std::string{ "PAL_STREAM_ACD" } },
-    {PAL_STREAM_ULTRASOUND,         std::string{ "PAL_STREAM_ULTRASOUND" } },
-    {PAL_STREAM_SENSOR_PCM_DATA,    std::string{ "PAL_STREAM_SENSOR_PCM_DATA" } },
-    {PAL_STREAM_SPATIAL_AUDIO,      std::string{ "PAL_STREAM_SPATIAL_AUDIO" } },
-    {PAL_STREAM_COMMON_PROXY,       std::string{ "PAL_STREAM_COMMON_PROXY" } },
-    {PAL_STREAM_SENSOR_PCM_RENDERER,std::string{ "PAL_STREAM_SENSOR_PCM_RENDERER" } },
-};
-
-const std::map<uint32_t, std::string> vsidLUT {
-    {VOICEMMODE1,    std::string{ "VOICEMMODE1" } },
-    {VOICEMMODE2,    std::string{ "VOICEMMODE2" } },
-    {VOICELBMMODE1,  std::string{ "VOICELBMMODE1" } },
-    {VOICELBMMODE2,  std::string{ "VOICELBMMODE2" } },
-};
-
-const std::map<uint32_t, std::string> loopbackLUT {
-    {PAL_STREAM_LOOPBACK_PCM,           std::string{ "PAL_STREAM_LOOPBACK_PCM" } },
-    {PAL_STREAM_LOOPBACK_HFP_RX,        std::string{ "PAL_STREAM_LOOPBACK_HFP_RX" } },
-    {PAL_STREAM_LOOPBACK_HFP_TX,        std::string{ "PAL_STREAM_LOOPBACK_HFP_TX" } },
-    {PAL_STREAM_LOOPBACK_COMPRESS,      std::string{ "PAL_STREAM_LOOPBACK_COMPRESS" } },
-    {PAL_STREAM_LOOPBACK_FM,            std::string{ "PAL_STREAM_LOOPBACK_FM" } },
-    {PAL_STREAM_LOOPBACK_KARAOKE,       std::string{ "PAL_STREAM_LOOPBACK_KARAOKE" }},
-    {PAL_STREAM_LOOPBACK_PLAYBACK_ONLY, std::string{ "PAL_STREAM_LOOPBACK_PLAYBACK_ONLY" } },
-    {PAL_STREAM_LOOPBACK_CAPTURE_ONLY,  std::string{ "PAL_STREAM_LOOPBACK_CAPTURE_ONLY" } },
-};
-
-const std::map<uint32_t, std::string> hapticsLUT {
-    {PAL_STREAM_HAPTICS_TOUCH,        std::string{ "PAL_STREAM_HAPTICS_TOUCH" } },
-    {PAL_STREAM_HAPTICS_RINGTONE,     std::string{ "PAL_STREAM_HAPTICS_RINGTONE" } },
-};
-
 #endif
-
-
 /* type of asynchronous write callback events. Mutually exclusive */
 typedef enum {
     PAL_STREAM_CBK_EVENT_WRITE_READY, /* non blocking write completed */
     PAL_STREAM_CBK_EVENT_DRAIN_READY,  /* drain completed */
     PAL_STREAM_CBK_EVENT_PARTIAL_DRAIN_READY, /* partial drain completed */
-    PAL_STREAM_CBK_EVENT_READ_DONE, /* stream hit some error, let AF take action */
+    PAL_STREAM_CBK_EVENT_READ_DONE, /* non blocking read completed */
     PAL_STREAM_CBK_EVENT_ERROR, /* stream hit some error, let AF take action */
+    PAL_STREAM_CBK_EVENT_DTMF_DETECTION, /* DTMF got detected in the stream */
+    PAL_STREAM_CBK_MAX = 0xFFFF,
 } pal_stream_callback_event_t;
 
 /* type of global callback events. */
 typedef enum {
     PAL_SND_CARD_STATE,
+    PAL_SOUND_DOSE_INFO, /*To report sound dose related info*/
 } pal_global_callback_event_t;
 
 struct pal_stream_info {
@@ -731,8 +532,15 @@ struct pal_stream_info {
     int32_t tx_proxy_type;   /** enums defined in enum pal_stream_proxy_tx_types */
     int32_t rx_proxy_type;   /** enums defined in enum pal_stream_proxy_rx_types */
     int32_t haptics_type;    /** enums defined in enum pal_sream_haptics_types */
+    bool isBitPerfect;                    /** true if stream is bitperfect (PCM_Immutable) */
     //pal_audio_attributes_t usage;       /** Not sure if we make use of this */
 };
+
+typedef enum {
+    CALL_TRANSLATION_DEFAULT = 0,
+    CALL_TRANSLATION_DIR_TX = 1,
+    CALL_TRANSLATION_DIR_RX = 2,
+} pal_call_translation_direction;
 
 typedef enum {
     INCALL_RECORD_VOICE_UPLINK = 1,
@@ -758,8 +566,26 @@ typedef enum {
     PAL_TTY_FULL = 3,
 } pal_tty_t;
 
+typedef enum {
+    INCALL_MUSIC_UPLINK = 1,
+    INCALL_MUSIC_DOWNLINK,
+} pal_incall_music_direction;
+
 struct pal_incall_music_info {
     bool local_playback;
+    pal_incall_music_direction music_dir;         /** use direction enum to indicate incall music content direction.
+                                                      Applicable for compressed streams only */
+};
+
+typedef enum {
+    PAL_HPCM_RX_PLAYBACK = 0,
+    PAL_HPCM_RX_CAPTURE = 1,
+    PAL_HPCM_TX_PLAYBACK = 2,
+    PAL_HPCM_TX_CAPTURE = 3,
+} pal_hpcm_stream_type_t;
+
+struct pal_hpcm_stream_info {
+    pal_hpcm_stream_type_t hpcm_stream_type;
 };
 
 typedef union {
@@ -767,6 +593,7 @@ typedef union {
     struct pal_voice_record_info voice_rec_info; /* mandatory */
     struct pal_voice_call_info voice_call_info; /* manatory for voice call*/
     struct pal_incall_music_info incall_music_info;
+    struct pal_hpcm_stream_info hpcm_stream_info;
 } pal_stream_info_t;
 
 /** Media configuraiton */
@@ -812,6 +639,7 @@ struct pal_stream_attributes {
     pal_stream_direction_t direction;            /**<  direction of the streams */
     struct pal_media_config in_media_config;     /**<  media config of the input audio samples */
     struct pal_media_config out_media_config;    /**<  media config of the output audio samples */
+    char* address;                               /**<  address */
 };
 
 /**< Key value pair to identify the topology of a usecase from default  */
@@ -959,7 +787,7 @@ typedef enum {
     PAL_PARAM_ID_RECOGNITION_CONFIG = 1,
     PAL_PARAM_ID_ECNS_ON_OFF = 2,
     PAL_PARAM_ID_DIRECTION_OF_ARRIVAL = 3,
-    PAL_PARAM_ID_UIEFFECT = 4,
+    PAL_PARAM_ID_UIEFFECT = 4, /*deprecated please dont use*/
     PAL_PARAM_ID_STOP_BUFFERING = 5,
     PAL_PARAM_ID_CODEC_CONFIGURATION = 6,
     /* Non-Stream Specific Parameters*/
@@ -992,7 +820,7 @@ typedef enum {
     PAL_PARAM_ID_WAKEUP_MODULE_VERSION = 33,
     PAL_PARAM_ID_WAKEUP_CUSTOM_CONFIG = 34,
     PAL_PARAM_ID_UNLOAD_SOUND_MODEL = 35,
-    PAL_PARAM_ID_MODULE_CONFIG = 36, /*Clients directly configure DSP modules*/
+    PAL_PARAM_ID_MODULE_CONFIG = 36, /*Deprecated: Clients directly configure DSP modules*/
     PAL_PARAM_ID_BT_A2DP_LC3_CONFIG = 37,
     PAL_PARAM_ID_PROXY_CHANNEL_CONFIG = 38,
     PAL_PARAM_ID_CONTEXT_LIST = 39,
@@ -1031,8 +859,37 @@ typedef enum {
     PAL_PARAM_ID_TIMESTRETCH_PARAMS = 72,
     PAL_PARAM_ID_LATENCY_MODE = 73,
     PAL_PARAM_ID_ST_CAPTURE_INFO = 74,
-    PAL_PARAM_ID_ST_RESOURCES_AVAILABLE = 75,
+    PAL_PARAM_ID_RESOURCES_AVAILABLE = 75,
     PAL_PARAM_ID_PROXY_RECORD_SESSION = 76,
+    PAL_PARAM_ID_ASR_MODEL = 77,
+    PAL_PARAM_ID_ASR_CONFIG = 78,
+    PAL_PARAM_ID_ASR_CUSTOM = 79,
+    PAL_PARAM_ID_ASR_FORCE_OUTPUT = 80,
+    PAL_PARAM_ID_ASR_OUTPUT = 81,
+    PAL_PARAM_ID_ASR_SET_PARAM = 82,
+    PAL_PARAM_ID_ORIENTATION = 83, /**For PAL Refactor*/
+    PAL_PARAM_ID_VENDOR_UUID = 84,
+    PAL_PARAM_ID_IS_DEVICE_CONNECTED = 85,
+    PAL_PARAM_ID_DTMF_DETECTION_CFG = 86,
+    PAL_PARAM_ID_DTMF_GEN_TONE_CFG = 87,
+    PAL_PARAM_ID_HAPTICS_MODE = 88,
+    PAL_PARAM_ID_MMA_MODE_BIT_CONFIG = 89,
+    PAL_PARAM_ID_WNR_MODE = 90,
+    PAL_PARAM_ID_ULTRASOUND_SET_GAIN = 91,
+    PAL_PARAM_ID_SDZ_MODEL = 92,
+    PAL_PARAM_ID_SDZ_CONFIG = 93,
+    PAL_PARAM_ID_SDZ_CUSTOM = 94,
+    PAL_PARAM_ID_SDZ_FORCE_OUTPUT = 95,
+    PAL_PARAM_ID_SDZ_OUTPUT = 96,
+    PAL_PARAM_ID_SDZ_SET_PARAM = 97,
+    PAL_PARAM_ID_SDZ_ENABLE = 98,
+    PAL_PARAM_ID_CALL_TRANSLATION_CONFIG = 99,
+    PAL_PARAM_ID_FORCE_RECOGNITION = 100,
+    PAL_PARAM_ID_BUFFERING_MODE = 101,
+    PAL_PARAM_ID_NMT_OUTPUT = 102,
+    PAL_PARAM_NMT_GET_NUM_EVENT = 103,
+    PAL_PARAM_NMT_GET_OUTPUT_TOKEN = 104,
+    PAL_PARAM_NMT_GET_PAYLOAD_SIZE = 105,
 } pal_param_id_type_t;
 
 /** HDMI/DP */
@@ -1077,6 +934,45 @@ struct pal_vol_ctrl_ramp_param {
    uint32_t ramp_period_ms;
 };
 
+/* Payload For Custom Config
+ * Description : Used by PAL client to customize
+ *               the device related information.
+ */
+#define PAL_MAX_CUSTOM_KEY_SIZE 128
+typedef struct pal_device_custom_config {
+    char custom_key[PAL_MAX_CUSTOM_KEY_SIZE];
+} pal_device_custom_config_t;
+
+
+/**
+ * @brief Structure to hold various types of device addresses.
+ * ID, basically a string for custom type of address
+ * IEEE 802 MAC address (exactly 6 elements)
+ * IPv4 Address (exactly 4 elements)
+ * IPv6 Address (exactly 8 elements)
+ * PCI bus Address. Set for USB devices (exactly 2 elements)
+ */
+
+typedef union {
+    char id [128];
+    uint8_t mac[6];
+    uint8_t ipv4[4];
+    uint32_t ipv6[8];
+    uint32_t alsa[2];
+} pal_address_type_t;
+
+/**< PAL device */
+#define DEVICE_NAME_MAX_SIZE 128
+struct pal_device {
+    pal_device_id_t id;             /**<  device id */
+    struct pal_media_config config; /**<  media config of the device */
+    struct pal_usb_device_address address;
+    char sndDevName[DEVICE_NAME_MAX_SIZE];
+    pal_device_custom_config_t custom_config; /**<  Optional */
+    pal_address_type_t addressV1;
+};
+
+
 /* Payload For ID: PAL_PARAM_ID_DEVICE_CONNECTION
  * Description   : Device Connection
 */
@@ -1084,6 +980,7 @@ typedef struct pal_param_device_connection {
     pal_device_id_t   id;
     bool              connection_state;
     pal_device_config_t device_config;
+    struct pal_device device; // intermediate remove once device_config instances are removed.
 } pal_param_device_connection_t;
 
 /* Payload For ID: PAL_PARAM_ID_GAIN_LVL_MAP
@@ -1200,9 +1097,12 @@ typedef struct  pal_param_haptics_cnfg_t {
     pal_stream_haptics_type_t mode;
     int16_t  effect_id;
     float    amplitude;
-    int16_t  strength;
+    int16_t strength;
     int32_t time;
     int16_t ch_mask;
+    bool isCompose;
+    int32_t buffer_size;
+    uint8_t *buffer_ptr;
 } pal_param_haptics_cnfg_t;
 
 /* Payload For ID: PAL_PARAM_ID_BT_SCO*
@@ -1278,6 +1178,7 @@ typedef struct pal_param_bta2dp {
     uint32_t latency;
     pal_device_id_t   dev_id;
     bool     is_suspend_setparam;
+    bool     is_in_call;
 } pal_param_bta2dp_t;
 
 /* Payload For ID: PAL_PARAM_ID_LATENCY_MODE
@@ -1298,14 +1199,26 @@ typedef struct pal_bt_tws_payload_s {
     uint32_t codecFormat;
 } pal_bt_tws_payload;
 
-/* Payload For Custom Config
- * Description : Used by PAL client to customize
- *               the device related information.
-*/
-#define PAL_MAX_CUSTOM_KEY_SIZE 128
-typedef struct pal_device_custom_config {
-    char custom_key[PAL_MAX_CUSTOM_KEY_SIZE];
-} pal_device_custom_config_t;
+/* Payload For ID: PAL_PARAM_ID_DTMF_DETECTION_CFG
+ * Description   : DTMF Detection module parameters
+ */
+typedef struct pal_param_dtmf_detection_cfg {
+    uint16_t enable;
+    pal_stream_direction_t dir;
+} pal_param_dtmf_detection_cfg_t;
+
+/* Payload For ID: PAL_PARAM_ID_DTMF_GEN_TONE_CFG
+ * Description   : DTMF Generator module parameters
+ */
+typedef struct pal_param_dtmf_gen_tone_cfg {
+    pal_stream_direction_t dir;
+    uint16_t high_freq;
+    uint16_t low_freq;
+    uint16_t gain;
+    int32_t  duration_ms;
+} pal_param_dtmf_gen_tone_cfg_t;
+
+
 
 typedef struct pal_bt_lc3_payload_s {
     bool isLC3MonoModeOn;
@@ -1315,41 +1228,36 @@ typedef struct pal_param_haptics_intensity {
     int intensity;
 } pal_param_haptics_intensity_t;
 
-/**< PAL device */
-#define DEVICE_NAME_MAX_SIZE 128
-struct pal_device {
-    pal_device_id_t id;                     /**<  device id */
-    struct pal_media_config config;         /**<  media config of the device */
-    struct pal_usb_device_address address;
-    char sndDevName[DEVICE_NAME_MAX_SIZE];
-    pal_device_custom_config_t custom_config;        /**<  Optional */
+/* Type of Ultrasound Gain */
+typedef enum {
+    PAL_ULTRASOUND_GAIN_MUTE = 0,
+    PAL_ULTRASOUND_GAIN_LOW,
+    PAL_ULTRASOUND_GAIN_HIGH,
+} pal_ultrasound_gain_t;
+
+enum BeCtrlsIndex {
+    BE_METADATA,
+    BE_MEDIAFMT,
+    BE_SETPARAM,
+    BE_GROUP_ATTR,
+    BE_MAX_NUM_MIXER_CONTROLS,
 };
 
-/**
- * Maps the modules instance id to module id for a single module
- */
-struct module_info {
-    uint32_t module_id; /**< module id */
-    uint32_t module_iid; /**< globally unique module instance id */
-};
+/** payload for Sound Dose Info */
+typedef struct pal_sound_dose_info {
+    struct pal_device device;
+    uint32_t is_momentary_exposure_warning;
+    uint32_t num_mel_values;
+    float mel_values[PAL_MAX_SOUND_DOSE_VALUES];
+    uint64_t timestamp[PAL_MAX_SOUND_DOSE_VALUES];
+} pal_sound_dose_info_t;
 
-/**
- * Structure mapping the tag_id to module info (mid and miid)
- */
-struct pal_tag_module_mapping {
-    uint32_t tag_id; /**< tag id of the module */
-    uint32_t num_modules; /**< number of modules matching the tag_id */
-    struct module_info mod_list[]; /**< module list */
-};
 
-/**
- * Used to return tags and module info data to client given a graph key vector
- */
-struct pal_tag_module_info {
-    /**< number of tags */
-    uint32_t num_tags;
-    /**< variable payload of type struct pal_tag_module_mapping*/
-    uint8_t pal_tag_module_list[];
+static const char *beCtrlNames[] = {
+    " metadata",
+    " rate ch fmt",
+    " setParam",
+    " grp config",
 };
 
 #define PAL_SOUND_TRIGGER_MAX_STRING_LEN 64 /* max length of strings in properties or descriptor structs */
@@ -1412,7 +1320,7 @@ struct pal_st_properties {
 };
 
 /** sound model structure passed in by ST Client during pal_st_load_sound_model() */
-struct pal_st_sound_model {
+struct __attribute__ ((aligned (8))) pal_st_sound_model {
     pal_st_sound_model_type_t type;           /* model type. e.g. PAL_SOUND_MODEL_TYPE_KEYPHRASE */
     struct st_uuid            uuid;           /* unique sound model ID. */
     struct st_uuid            vendor_uuid;    /* unique vendor ID. Identifies the engine the
@@ -1438,7 +1346,7 @@ struct pal_st_phrase {
  * Proprietary representation of key phrases in binary data must match information indicated
  * by phrases field use this when not sending
  */
-struct pal_st_phrase_sound_model {
+struct __attribute__ ((aligned (8))) pal_st_phrase_sound_model {
     struct pal_st_sound_model   common;         /** common sound model */
     uint32_t                    num_phrases;    /** number of key phrases in model */
     struct pal_st_phrase        phrases[PAL_SOUND_TRIGGER_MAX_PHRASES];
@@ -1554,6 +1462,190 @@ struct __attribute__((__packed__)) version_arch_payload {
     char arch[64];
 };
 
+typedef enum {
+    PAL_ASR_EVENT_STATUS_SUCCESS = 0,
+    PAL_ASR_EVENT_STATUS_ABORTED = 1,
+    PAL_ASR_EVENT_STATUS_TIMEOUT = 2,
+} pal_asr_event_status_t;
+
+typedef enum {
+    PAL_ASR_STATUS_SUCCESS = 0,
+    PAL_ASR_STATUS_INVALID = -1,
+    PAL_ASR_STATUS_RESOURCE_CONTENTION = -2,
+    PAL_ASR_STATUS_OPERATION_NOT_SUPPORTED = -3,
+    PAL_ASR_STATUS_FAILURE = -4,
+} pal_asr_status_t;
+
+/** Payload for ID : PAL_PARAM_ID_ASR_MODEL.
+ *  Description: To be used to pass ASR model.
+ */
+struct pal_asr_model {
+    struct st_uuid vendor_uuid;  /**< Unique vendor ID. Identifies the engine the model was build for */
+    int32_t fd;                  /**< ASR model */
+    uint32_t size;               /**< ASR model size */
+};
+
+/** Payload for ID : PAL_PARAM_ID_ASR_CONFIG.
+ *  Description: To be used to pass ASR input configuration.
+ */
+struct pal_asr_config {
+    int32_t input_language_code;            /**< input language code */
+    int32_t output_language_code;           /**< output language code */
+    bool enable_language_detection;         /**< language detection switch enable/disable flag */
+    bool enable_translation;                /**< translation switch enable/disable flag */
+    bool enable_continuous_mode;            /**< continuous mode enable/disable flag */
+    bool enable_partial_transcription;      /**< partial transcription switch enable/disable flag */
+    bool enable_logger_mode;                /**< Flag to enable/disable logger mode */
+    bool enable_timestamp;                  /**< Flag to enable/disable output with timestamp details */
+    bool enable_speaker_diarization;        /**< Flag to enable/disable speaker diarization */
+    uint32_t threshold;                     /**< Confidence threshold for ASR transcription */
+    uint32_t timeout_duration;              /**< ASR processing timeout, in milliseconds,
+                                                 if silence is not detected after the speech
+                                                 processing is started */
+    uint32_t silence_detection_duration;    /**< "No speech" duration needed before
+                                                 determining speech has ended (in ms) */
+
+    bool outputBufferMode;                  /**< Buffer mode enable/disable */
+    uint32_t data_size;                     /**< Additional Engine specific custom data size */
+    uint8_t data[];                         /**< custom data offset from the start of this
+                                                 structure */
+};
+
+struct pal_tts_config {
+    uint32_t language_code;            /**< consistente enum across ASR, Translation and TTS */
+    uint32_t speech_format;            /**< Speech output mode. Current : PCM */
+    uint32_t reserved;
+};
+
+struct pal_nmt_config {
+    uint32_t input_language_code;
+    uint32_t output_language_code;
+};
+
+/* Payload for populating the ASR, TTS and NMT modules
+ */
+struct call_translation_config {
+    bool enable;
+    pal_call_translation_direction call_translation_dir;        /** Direction for the call_translation usecase */
+    struct pal_tts_config tts_module_config;        /** TTS module config */
+    struct pal_nmt_config nmt_module_config;	    /** NMT module config */
+    struct pal_asr_config asr_module_config;        /** ASR module config */
+};
+
+#define MAX_TRANSCRIPTION_CHAR_SIZE 1024
+#define MAX_JSON_CHAR_SIZE 4096
+#define MAX_NUM_WORDS 200
+#define MAX_WORD_LENGTH 28
+
+typedef enum {
+    PLAIN_TEXT = 0,
+    TIMESTAMP_BASED_TEXT,
+    SPEAKER_DIARIZATION,
+    CALL_TRANSLATION_TEXT,
+    CALL_TRANSLATION_OUT_TEXT = CALL_TRANSLATION_TEXT,
+    CALL_TRANSLATION_IN_TEXT = CALL_TRANSLATION_TEXT + 1,
+    CALL_TRANSLATION_INOUT_TEXT = CALL_TRANSLATION_TEXT + 2,
+} eventType;
+
+struct pal_asr_engine_event {
+    bool is_final;                          /**< Final transcription after end of speech is detected. */
+    uint32_t confidence;                    /**< Confidence for the entire transcription */
+    uint32_t text_size;                     /**< Size of text to sent to the client */
+    char text[MAX_TRANSCRIPTION_CHAR_SIZE]; /**< Text to be sent to the client */
+    uint32_t json_size;                     /**< size of JSON output, to be sent to client */
+    char result_json[MAX_JSON_CHAR_SIZE];   /**< JSON result */
+    uint32_t data_size;                     /**< event payload size */
+    uint8_t data[];                         /**< event payload offset from the start of this structure */
+};
+
+/** Payload to be used for callback for ASR event through pal_stream_callback. */
+struct pal_asr_event {
+    pal_asr_event_status_t status;
+    uint32_t num_events;
+    struct pal_asr_engine_event event[];
+};
+
+/** Struct to store timestamp details of every word present in ASR's output text. */
+struct asr_word {
+    uint32_t word_confidence;              /**< Confidence level for the word */
+    char word[MAX_WORD_LENGTH];            /**< Word, whose timestamp details are within the strcut */
+    uint64_t start_ts;                     /**< Word's start timestamp */
+    uint64_t end_ts;                       /**< Word's end timestamp */
+};
+
+/** Payload to be used to generate callback data for ASR's timestamp based output. */
+struct pal_asr_engine_ts_event {
+    bool is_final;                          /**< Final transcription after end of speech is detected. */
+    uint32_t confidence;                    /**< Confidence for the entire transcription */
+    uint32_t text_size;                     /**< Size of text to sent to the client */
+    char text[MAX_TRANSCRIPTION_CHAR_SIZE]; /**< Text to be sent to the client */
+    uint64_t start_ts;                      /**< Text's start timestamp */
+    uint64_t end_ts;                        /**< Text's end timestamp */
+    uint32_t num_words;                     /**< Number of words present in word array */
+    struct asr_word word[MAX_NUM_WORDS];    /**< Store timestamp details of every word present in text. */
+    uint32_t json_size;                     /**< size of JSON output, to be sent to client */
+    char result_json[MAX_JSON_CHAR_SIZE];   /**< JSON result */
+    uint32_t data_size;                     /**< event payload size */
+    uint8_t data[];                         /**< event payload offset from the start of this structure */
+};
+
+/** Payload to be used for callback for ASR's timestamp based event through pal_stream_callback. */
+struct pal_asr_ts_event {
+    pal_asr_event_status_t status;
+    uint32_t num_events;
+    struct pal_asr_engine_ts_event event[];
+};
+
+/** Payload containing speaker's information */
+struct sdz_speaker_info {
+    uint32_t speaker_id;
+    uint64_t start_ts;
+    uint64_t end_ts;
+};
+
+/** Output payload for speaker diarization */
+struct sdz_output {
+    uint32_t num_speakers;
+    uint32_t overlap_detected;
+    struct sdz_speaker_info speakers_list[];
+};
+
+/** Payload for speaker diarization event */
+struct pal_sdz_event {
+    uint32_t num_outputs;
+    struct sdz_output output[];
+};
+
+struct pal_nmt_engine_event {
+    uint32_t is_final;                             /**< payload is partial output of NMT or complete */
+    uint32_t output_text_size;                     /**< Output size of text to sent to the client */
+    char output_text[MAX_TRANSCRIPTION_CHAR_SIZE]; /**< Text to be sent to the client */
+    uint32_t input_text_size;                      /**< Input size of text to sent to the client */
+    char input_text[MAX_TRANSCRIPTION_CHAR_SIZE];  /**< Text to be sent to the client */
+    uint32_t json_size;                            /**< size of JSON output, to be sent to client */
+    char result_json[MAX_JSON_CHAR_SIZE];          /**< JSON result */
+    uint32_t data_size;                            /**< event payload size */
+    uint8_t data[];                                /**< event payload offset from the start of this structure */
+};
+
+struct pal_nmt_event {
+    int32_t status;
+    int32_t input_language_code;
+    int32_t output_language_code;
+    pal_stream_direction_t direction;
+    uint32_t num_events;
+    struct pal_nmt_engine_event event[];
+};
+
+typedef struct pal_callback_config {
+    int32_t noOfPrevDevices;
+    int32_t noOfCurrentDevices;
+    pal_device_id_t *prevDevices;
+    pal_device_id_t *currentDevices;
+    struct pal_stream_attributes streamAttributes;
+    uint32_t *event;
+} pal_callback_config_t;
+
 struct pal_compr_gapless_mdata {
        uint32_t encoderDelay;
        uint32_t encoderPadding;
@@ -1575,6 +1667,15 @@ struct pal_event_read_write_done_payload {
     struct pal_buffer buff; /**< buffer that was passed to pal_stream_read/pal_stream_write */
 };
 
+/**
+ * Event payload passed to client with PAL_STREAM_CBK_EVENT_DTMF_DETECTION events
+  */
+struct pal_event_dtmf_detect_data {
+    pal_stream_direction_t dir;
+    uint32_t dtmf_high_freq;
+    uint32_t dtmf_low_freq;
+};
+
 /** @brief Callback function prototype to be given for
  *         pal_open_stream.
  *
@@ -1591,6 +1692,17 @@ typedef int32_t (*pal_stream_callback)(pal_stream_handle_t *stream_handle,
                                        uint32_t event_id, uint32_t *event_data,
                                        uint32_t event_data_size,
                                        uint64_t cookie);
+
+/** @brief Callback function prototype to be given for
+ *         pal_audio_event_callback.
+ *
+ * \param[in] config - configuration data related to
+ *       stream and device.
+ * \param[in] event - event raised on the stream.
+ * \param[in] isregister - specifies if it is called
+ *       during register of callback.
+ */
+typedef int32_t (*pal_audio_event_callback)(pal_callback_config_t *config, uint32_t event, bool isregister);
 
 /** @brief Callback function prototype to be given for
  *         pal_register_callback.
@@ -1646,8 +1758,18 @@ typedef struct pal_buffer_config {
 #define PAL_VOIP_PLAYBACK_PERIOD_COUNT 2
 #define PAL_ULL_PLAYBACK_PERIOD_COUNT 2
 
+
+typedef struct custom_payload_uc_info_s {
+    pal_stream_type_t pal_stream_type; /**< type of stream to apply the payload param */
+    pal_device_id_t pal_device_id;     /**< type of device to apply the payload param */
+    uint32_t sample_rate;              /**< sample rate of the stream to apply the payload param */
+    uint32_t instance_id;              /**< instance id of the stream */
+    bool streamless;                   /**< set to true to create a dummy stream to send command directly to framework */
+    char* address;                    /**< address */
+
+}custom_payload_uc_info_t;
+
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif
-
 #endif /*PAL_DEFS_H*/

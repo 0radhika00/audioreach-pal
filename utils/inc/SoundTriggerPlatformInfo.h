@@ -26,9 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -42,7 +41,9 @@
 #include <memory>
 #include <string>
 #include "PalDefs.h"
+#ifdef PAL_USE_SYSLOG
 #include "kvh2xml.h"
+#endif
 #include "SoundTriggerUtils.h"
 
 #define MAX_MODULE_CHANNELS 4
@@ -69,8 +70,8 @@ enum StInputModes {
 class SoundTriggerXml
 {
 public:
-    virtual void HandleStartTag(const char *tag, const char **attribs) = 0;
-    virtual void HandleEndTag(struct xml_userdata *data __unused, const char *tag __unused) {};
+    virtual void HandleStartTag(const std::string& tag, const char **attribs) = 0;
+    virtual void HandleEndTag(struct xml_userdata *data, const std::string& tag) {};
     virtual void HandleCharData(const char *data __unused) {};
     virtual ~SoundTriggerXml() {};
 };
@@ -81,7 +82,7 @@ class SoundTriggerUUID {
     SoundTriggerUUID & operator=(SoundTriggerUUID &rhs);
     bool operator<(const SoundTriggerUUID &rhs) const;
     bool CompareUUID(const struct st_uuid uuid) const;
-    static int StringToUUID(const char* str, SoundTriggerUUID& UUID);
+    static int StringToUUID(const std::string& str, SoundTriggerUUID& UUID);
     uint32_t timeLow;
     uint16_t timeMid;
     uint16_t timeHiAndVersion;
@@ -93,12 +94,12 @@ class SoundTriggerUUID {
 class CaptureProfile : public SoundTriggerXml
 {
 public:
-    CaptureProfile(std::string name);
+    CaptureProfile(const std::string& name);
     CaptureProfile() = delete;
     CaptureProfile(CaptureProfile &rhs) = delete;
     CaptureProfile & operator=(CaptureProfile &rhs) = delete;
 
-    void HandleStartTag(const char* tag, const char* * attribs) override;
+    void HandleStartTag(const std::string& tag, const char **attribs) override;
 
     std::string GetName() const { return name_; }
     pal_device_id_t GetDevId() const { return device_id_; }
@@ -139,11 +140,10 @@ public:
     SoundTriggerPlatformInfo(SoundTriggerPlatformInfo &rhs) = delete;
     SoundTriggerPlatformInfo & operator=(SoundTriggerPlatformInfo &rhs) = delete;
 
-    void HandleStartTag(const char *tag, const char **attribs) override;
-    void HandleEndTag(struct xml_userdata *data, const char *tag) override;
+    void HandleStartTag(const std::string& tag, const char **attribs) override;
+    void HandleEndTag(struct xml_userdata *data, const std::string& tag) override;
 
     static std::shared_ptr<SoundTriggerPlatformInfo> GetInstance();
-    static bool GetLpiEnable() { return lpi_enable_; }
     static bool GetSupportNLPISwitch() { return support_nlpi_switch_; }
     static bool GetSupportDevSwitch() { return support_device_switch_; }
     static bool GetEnableDebugDumps() { return enable_debug_dumps_; }
@@ -158,7 +158,6 @@ public:
     std::shared_ptr<CaptureProfile> GetCaptureProfileFromMap(std::string cap_prof_name);
 
 private:
-    static bool lpi_enable_;
     static bool support_nlpi_switch_;
     static bool support_device_switch_;
     static bool enable_debug_dumps_;

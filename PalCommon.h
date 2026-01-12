@@ -26,9 +26,8 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Changes from Qualcomm Innovation Center are provided under the following license:
- *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -37,8 +36,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#ifdef FEATURE_IPQ_OPENWRT
-#include <audio_utils/log.h>
+#ifdef PAL_USE_SYSLOG
+#include <syslog.h>
+#define ALOGE(fmt, arg...) syslog (LOG_ERR, fmt, ##arg)
+#define ALOGI(fmt, arg...) syslog (LOG_INFO, fmt, ##arg)
+#define ALOGD(fmt, arg...) syslog (LOG_DEBUG, fmt, ##arg)
+#define ALOGV(fmt, arg...) syslog (LOG_NOTICE, fmt, ##arg)
 #else
 #include <log/log.h>
 #endif
@@ -50,12 +53,10 @@
 
 extern uint32_t pal_log_lvl;
 
-#define PAL_FATAL(log_tag, arg,...)                                       \
+#define PAL_FATAL(log_tag, arg,...)                                          \
     if (pal_log_lvl & PAL_LOG_ERR) {                              \
         ALOGE("%s: %d: "  arg, __func__, __LINE__, ##__VA_ARGS__);\
-        abort();                                                  \
     }
-
 #define PAL_ERR(log_tag, arg,...)                                          \
     if (pal_log_lvl & PAL_LOG_ERR) {                              \
         ALOGE("%s: %d: "  arg, __func__, __LINE__, ##__VA_ARGS__);\

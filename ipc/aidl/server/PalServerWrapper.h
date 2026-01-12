@@ -143,6 +143,8 @@ class ClientInfo : public IStreamOps {
     void getStreamMediaConfig(int64_t handle, pal_media_config *config);
     static int32_t onCallback(pal_stream_handle_t *handle, uint32_t eventId, uint32_t *eventData,
                               uint32_t eventDataSize, uint64_t cookie);
+    static std::mutex sCallbackRegistryMutex;
+    static std::unordered_map<uint64_t, std::weak_ptr<CallbackInfo>> sCallbackRegistry;
 };
 
 class PalServerWrapper : public BnPAL, public IStreamOps {
@@ -225,6 +227,22 @@ class PalServerWrapper : public BnPAL, public IStreamOps {
     void removeClient(int pid);
     void removeClient_l(int pid);
     void removeClientInfoData(int64_t handle);
+
+  ::ndk::ScopedAStatus ipc_pal_stream_get_custom_param(int64_t in_handle,
+                                                      const std::vector<char16_t>& in_paramId,
+                                                      int32_t in_size, std::vector<uint8_t>* _aidl_return) override;
+
+  ::ndk::ScopedAStatus ipc_pal_stream_set_custom_param(int64_t in_handle,
+                                                      const std::vector<char16_t>& in_paramId,
+                                                      const std::vector<uint8_t>& in_payload, int32_t in_size) override;
+
+  ::ndk::ScopedAStatus ipc_pal_get_custom_param(const ::aidl::vendor::qti::hardware::pal::PalCustomPayloadInfo& in_ucInfo,
+                                                const std::vector<char16_t>& in_paramId,
+                                                const std::vector<uint8_t> &paramPayload, std::vector<uint8_t>* _aidl_return) override;
+
+  ::ndk::ScopedAStatus ipc_pal_set_custom_param(const ::aidl::vendor::qti::hardware::pal::PalCustomPayloadInfo& in_ucInfo,
+                                                const std::vector<char16_t>& in_paramId, const std::vector<uint8_t>& in_payload,
+                                                int32_t in_size) override;
 
     std::mutex mLock;
     // pid vs clientInfo

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -16,6 +16,7 @@
 #include <aidl/vendor/qti/hardware/pal/PalMmapPosition.h>
 #include <aidl/vendor/qti/hardware/pal/PalParamPayload.h>
 #include <aidl/vendor/qti/hardware/pal/PalStreamAttributes.h>
+#include <aidl/vendor/qti/hardware/pal/PalCustomPayloadInfo.h>
 #include <aidlcommonsupport/NativeHandle.h>
 #include <log/log.h>
 #include <pal/PalLegacyToAidl.h>
@@ -73,6 +74,7 @@ PalStreamAttributes LegacyToAidl::convertPalStreamAttributesToAidl(
     aidlStreamInfo.isStreaming = palStreamInfo.is_streaming;
     aidlStreamInfo.loopbackType = palStreamInfo.loopback_type;
     aidlStreamInfo.hapticsType = palStreamInfo.haptics_type;
+    aidlStreamInfo.isBitPerfect = palStreamInfo.isBitPerfect;
     aidlStreamAttr.info = aidlStreamInfo;
 
     aidlStreamAttr.flags = static_cast<PalStreamFlag>(palStreamAttr->flags);
@@ -288,4 +290,21 @@ std::vector<uint8_t> LegacyToAidl::convertRawPalParamPayloadToVector(void *paylo
     memcpy(aidlPayload.data(), payload, size);
     return std::move(aidlPayload);
 }
+
+PalCustomPayloadInfo LegacyToAidl::convertPalCustomPayloadInfoToAidl(custom_payload_uc_info_t *palSessCPInfo) {
+    PalCustomPayloadInfo UCInfo;
+
+    if(palSessCPInfo == nullptr){
+        return {};
+    }
+
+    UCInfo.streamType = static_cast<PalStreamType>(palSessCPInfo->pal_stream_type);
+    UCInfo.deviceId = static_cast<PalDeviceId>(palSessCPInfo->pal_device_id);
+    UCInfo.sample_rate = static_cast<int>(palSessCPInfo->sample_rate);
+    UCInfo.instanceId = static_cast<int>(palSessCPInfo->instance_id);
+    UCInfo.streamless = static_cast<bool>(palSessCPInfo->streamless);
+
+    return UCInfo;
+}
+
 }

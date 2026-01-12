@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023-2025 Qualcomm Innovation Center, Inc. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -41,6 +41,7 @@ void AidlToLegacy::convertPalStreamAttributes(const PalStreamAttributes &aidlCon
     palStreamAttributes->info.opt_stream_info.is_streaming = aidlConfig.info.isStreaming;
     palStreamAttributes->info.opt_stream_info.loopback_type = aidlConfig.info.loopbackType;
     palStreamAttributes->info.opt_stream_info.haptics_type = aidlConfig.info.hapticsType;
+    palStreamAttributes->info.opt_stream_info.isBitPerfect = aidlConfig.info.isBitPerfect;
     palStreamAttributes->flags = (pal_stream_flags_t)aidlConfig.flags;
     palStreamAttributes->direction = (pal_stream_direction_t)aidlConfig.direction;
 
@@ -121,4 +122,14 @@ void AidlToLegacy::convertPalSessionTime(const PalSessionTime &aildSessTime,
     palSessTime->timestamp.value_lsw = aildSessTime.timestamp.valLsw;
     palSessTime->timestamp.value_msw = aildSessTime.timestamp.valMsw;
 }
+
+void AidlToLegacy::convertPalCustomPayloadInfo(const PalCustomPayloadInfo &aildCPInfo,
+                                               custom_payload_uc_info_t *palSessCPInfo){
+    palSessCPInfo->pal_stream_type = (pal_stream_type_t)aildCPInfo.streamType;
+    palSessCPInfo->pal_device_id= (pal_device_id_t)aildCPInfo.deviceId;
+    palSessCPInfo->sample_rate= aildCPInfo.sample_rate;
+    palSessCPInfo->instance_id= aildCPInfo.instanceId;
+    palSessCPInfo->streamless= aildCPInfo.streamless;
+}
+
 }

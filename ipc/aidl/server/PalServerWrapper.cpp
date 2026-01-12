@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
@@ -13,12 +13,18 @@
 #include <pal/SharedMemoryWrapper.h>
 #include <pal/Utils.h>
 #include "MetadataParser.h"
+#include <map>
+#include "PalARDefs.h" /*need to remove after deprication*/
 
 #define MAX_CACHE_SIZE 64
 
 using ndk::ScopedAStatus;
 
 namespace aidl::vendor::qti::hardware::pal {
+
+std::unordered_map<uint64_t, std::weak_ptr<CallbackInfo>> ClientInfo::sCallbackRegistry;
+std::mutex ClientInfo::sCallbackRegistryMutex;
+
 // map<FD, map<offset, input_frame_id>>
 std::map<int, std::map<int32_t, int64_t>> gInputsPendingAck;
 std::mutex gInputsPendingAckLock;
@@ -196,10 +202,16 @@ void ClientInfo::unregisterCallback(int64_t handle) {
                                 return (callback->getStreamHandle() == handle);
                             });
 
+    uint64_t callbackId = 0;
     if (itr != mCallbackInfo.end()) {
+        callbackId = reinterpret_cast<uint64_t>(itr->get());
         mCallbackInfo.erase(itr);
     }
-
+    if (callbackId != 0)
+    {
+        std::lock_guard<std::mutex> lock(sCallbackRegistryMutex);
+        sCallbackRegistry.erase(callbackId);
+    }
     ALOGV("%s, after removing callback size %d ", __func__, mCallbackInfo.size());
 }
 
@@ -238,8 +250,8 @@ void ClientInfo::cleanup() {
             stream.second->closeSharedMemoryFdPairs();
         }
     }
-    clearCallbacks();
     clearStreams();
+    clearCallbacks();
 }
 
 std::shared_ptr<StreamInfo> ClientInfo::getStreamInfo_l(int64_t handle) {
@@ -287,7 +299,20 @@ bool ClientInfo::isValidStreamHandle(int64_t handle) {
 
 int32_t ClientInfo::onCallback(pal_stream_handle_t *handle, uint32_t eventId, uint32_t *eventData,
                                uint32_t eventDataSize, uint64_t cookie) {
-    CallbackInfo *callbackInfo = (CallbackInfo *)cookie;
+
+    std::shared_ptr<CallbackInfo> callbackInfo;
+    {
+        std::lock_guard<std::mutex> lock(sCallbackRegistryMutex);
+        auto it = sCallbackRegistry.find(cookie);
+        if (it != sCallbackRegistry.end()) {
+            callbackInfo = it->second.lock();
+        }
+    }
+    if (!callbackInfo) {
+        ALOGW("CallbackInfo has already been destroyed");
+        return -EINVAL;
+    }
+
     IPALCallback *callbackBinder = callbackInfo->mCallback.get();
 
     if (!AIBinder_isAlive(callbackBinder->asBinder().get())) {
@@ -579,6 +604,11 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
         addStreamHandle((int64_t)handle);
         callBackInfo->setHandle((int64_t)handle);
         client->registerCallback((int64_t)handle, cb, callBackInfo);
+        uint64_t callbackId = reinterpret_cast<uint64_t>(callBackInfo.get());
+        {
+            std::lock_guard<std::mutex> lock(ClientInfo::sCallbackRegistryMutex);
+            ClientInfo::sCallbackRegistry[callbackId] = callBackInfo;
+        }
     }
     return status_tToBinderResult(ret);
 }
@@ -760,11 +790,9 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
         return status_tToBinderResult(-EINVAL);
 
     buf.size = inBuf.data()->size;
-    buf.buffer = (uint8_t *)calloc(1, buf.size);
-    if (!buf.buffer) {
-        ALOGE("%s: failed to calloc", __func__);
-        return status_tToBinderResult(-ENOMEM);
-    }
+    std::vector<uint8_t> dataBuffer(buf.size, 0);
+    buf.buffer = dataBuffer.data();
+
     buf.metadata_size = MetadataParser::READ_METADATA_MAX_SIZE();
     auto fdHandle = AidlToLegacy::getFdIntFromNativeHandle(inBuf.data()->allocInfo.allocHandle);
 
@@ -971,7 +999,7 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
         PalStreamType streamType, int8_t dir, std::vector<uint8_t> *aidlReturn) {
     return ScopedAStatus::ok();
 }
-
+/*need to remove depercated*/
 ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_stream_get_tags_with_module_info(
         const int64_t handle, int32_t size, std::vector<uint8_t> *aidlReturn) {
     uint8_t *palPayload = NULL;
@@ -987,8 +1015,9 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
             return status_tToBinderResult(-ENOMEM);
         }
     }
-    int32_t ret = pal_stream_get_tags_with_module_info((pal_stream_handle_t *)handle, &payloadSize,
-                                                       palPayload);
+    int32_t ret = pal_stream_get_custom_param((pal_stream_handle_t *)handle,
+                                            PAL_CUSTOM_PARAM_AR_TAG_MODULE_INFO,
+                                            palPayload, &payloadSize);
 
     if (!ret && (payloadSize <= size) && palPayload != NULL) {
         aidlReturn->resize(payloadSize);
@@ -997,4 +1026,108 @@ std::shared_ptr<ClientInfo> PalServerWrapper::getClient_l() {
     free(palPayload);
     return status_tToBinderResult(ret);
 }
+
+::ndk::ScopedAStatus PalServerWrapper::ipc_pal_stream_get_custom_param(int64_t in_handle,
+                                        const std::vector<char16_t>& in_paramId,
+                                        int32_t in_size, std::vector<uint8_t>* _aidl_return){
+    uint8_t *payload;
+    char *paramID = (char*)in_paramId.data();
+    size_t size = in_size;
+    if (in_size > 0) {
+        payload = (uint8_t*)calloc(1, in_size);
+        if (payload == NULL) {
+            ALOGE("%s: Cannot allocate memory for pal payload ", __func__);
+            return status_tToBinderResult(-ENOMEM);
+        }
+    } else {
+        ALOGE("%s: invalid size provided ", __func__);
+        return status_tToBinderResult(-EINVAL);
+    }
+
+    int32_t ret = pal_stream_get_custom_param((pal_stream_handle_t*)in_handle,
+                                              paramID, payload, &size);
+    if (!ret && size <= in_size) {
+        _aidl_return->resize(size);
+        memcpy(_aidl_return->data(), payload, size);
+    }
+    free(payload);
+    return status_tToBinderResult(ret);
+}
+
+::ndk::ScopedAStatus PalServerWrapper::ipc_pal_stream_set_custom_param(int64_t in_handle,
+                                        const std::vector<char16_t>& in_paramId,
+                                        const std::vector<uint8_t>& in_payload, int32_t in_size){
+    char *paramID = (char*)in_paramId.data();
+    if(!in_size){
+        ALOGE("%s: payload size is %d failure", __func__, in_size);
+        return status_tToBinderResult(-EINVAL);
+    }
+    if(!isValidStreamHandle(in_handle))
+        return status_tToBinderResult(-EINVAL);
+
+    auto palParamPayload = VALUE_OR_RETURN(allocate<int8_t>(in_size));
+    memcpy(palParamPayload.get(), in_payload.data(), in_size);
+
+    int32_t ret = pal_stream_set_custom_param((pal_stream_handle_t*)in_handle,
+                                               paramID, (void *)palParamPayload.get(),
+                                               in_size);
+    return status_tToBinderResult(ret);
+}
+
+  ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_get_custom_param(const ::aidl::vendor::qti::hardware::pal::PalCustomPayloadInfo& in_ucInfo,
+                                        const std::vector<char16_t>& in_paramId,
+                                        const std::vector<uint8_t> &paramPayload, std::vector<uint8_t>* _aidl_return){
+    uint8_t *payload;
+    char *paramID = (char*)in_paramId.data();
+    custom_payload_uc_info_t ucInfo;
+    size_t in_size = paramPayload.size() * sizeof(uint8_t);
+    size_t size = in_size;
+
+    ALOGV("%s: enter", __func__);
+    if (in_size > 0) {
+        payload = (uint8_t*)calloc(1, in_size);
+        if (payload == NULL) {
+            ALOGE("%s: Cannot allocate memory for pal payload ", __func__);
+            return status_tToBinderResult(-ENOMEM);
+        }
+        memcpy(payload, paramPayload.data(), size);
+    }  else {
+        ALOGE("%s: invalid size provided ", __func__);
+        return status_tToBinderResult(-EINVAL);
+    }
+
+    AidlToLegacy::convertPalCustomPayloadInfo(in_ucInfo, &ucInfo);
+    int32_t ret = pal_get_custom_param(&ucInfo, paramID, payload, &size);
+    if (!ret && size <= in_size) {
+        _aidl_return->resize(size);
+        memcpy(_aidl_return->data(), payload, size);
+    }
+    free(payload);
+    ALOGV("%s, Exit: ret %d", __func__, ret);
+    return status_tToBinderResult(ret);
+}
+
+  ::ndk::ScopedAStatus PalServerWrapper::ipc_pal_set_custom_param(const ::aidl::vendor::qti::hardware::pal::PalCustomPayloadInfo& in_ucInfo,
+                                        const std::vector<char16_t>& in_paramId, const std::vector<uint8_t>& in_payload,
+                                        int32_t in_size){
+    char *paramID = (char*)in_paramId.data();
+    custom_payload_uc_info_t ucInfo;
+
+    ALOGV("%s: enter", __func__);
+    if(!in_size){
+        ALOGE("%s: payload size is %d failure", __func__, in_size);
+        return status_tToBinderResult(-EINVAL);
+    }
+
+    auto palParamPayload = VALUE_OR_RETURN(allocate<int8_t>(in_size));
+    memcpy(palParamPayload.get(), in_payload.data(), in_size);
+
+    AidlToLegacy::convertPalCustomPayloadInfo(in_ucInfo, &ucInfo);
+    int32_t ret = pal_set_custom_param(&ucInfo, paramID,
+                                      (void *)palParamPayload.get(),
+                                      in_size);
+    ALOGV("%s, Exit: ret %d", __func__, ret);
+    return status_tToBinderResult(ret);
+}
+
 }
