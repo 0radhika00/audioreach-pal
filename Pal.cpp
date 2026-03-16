@@ -352,7 +352,9 @@ int32_t pal_stream_close(pal_stream_handle_t *stream_handle)
     if (!rm) {
         PAL_ERR(LOG_TAG, "Invalid resource manager");
         status = -EINVAL;
+#ifndef PAL_MEMLOG_UNSUPPORTED
         kpiEnqueue(__func__, false);
+#endif
         return status;
     }
 
@@ -360,7 +362,9 @@ int32_t pal_stream_close(pal_stream_handle_t *stream_handle)
     if (!rm->isActiveStream(stream_handle)) {
         status = -EINVAL;
         rm->unlockActiveStream();
+#ifndef PAL_MEMLOG_UNSUPPORTED
         kpiEnqueue(__func__, false);
+#endif
         return status;
     }
 
@@ -372,7 +376,9 @@ int32_t pal_stream_close(pal_stream_handle_t *stream_handle)
 
     if (rm->deactivateStreamUserCounter(s)) {
         PAL_ERR(LOG_TAG, "stream is being closed by another client");
+#ifndef PAL_MEMLOG_UNSUPPORTED
         kpiEnqueue(__func__, false);
+#endif
         return 0;
     }
 
@@ -653,7 +659,9 @@ int32_t pal_stream_get_param(pal_stream_handle_t *stream_handle,
     if (!rm->isActiveStream(stream_handle)) {
         rm->unlockActiveStream();
         status = -EINVAL;
+#ifndef PAL_MEMLOG_UNSUPPORTED
         kpiEnqueue(__func__, false);
+#endif
         return status;
     }
 
@@ -662,7 +670,9 @@ int32_t pal_stream_get_param(pal_stream_handle_t *stream_handle,
     if (0 != status) {
         rm->unlockActiveStream();
         PAL_ERR(LOG_TAG, "failed to increase stream user count");
+#ifndef PAL_MEMLOG_UNSUPPORTED
         kpiEnqueue(__func__, false);
+#endif
         return status;
     }
     rm->unlockActiveStream();
@@ -715,7 +725,9 @@ int32_t pal_stream_set_param(pal_stream_handle_t *stream_handle, uint32_t param_
     if (!rm->isActiveStream(stream_handle)) {
         rm->unlockActiveStream();
         status = -EINVAL;
+#ifndef PAL_MEMLOG_UNSUPPORTED
         kpiEnqueue(__func__, false);
+#endif
         return status;
     }
 
@@ -724,7 +736,9 @@ int32_t pal_stream_set_param(pal_stream_handle_t *stream_handle, uint32_t param_
     if (0 != status) {
         rm->unlockActiveStream();
         PAL_ERR(LOG_TAG, "failed to increase stream user count");
+#ifndef PAL_MEMLOG_UNSUPPORTED
         kpiEnqueue(__func__, false);
+#endif
         return status;
     }
     rm->unlockActiveStream();
@@ -737,7 +751,9 @@ int32_t pal_stream_set_param(pal_stream_handle_t *stream_handle, uint32_t param_
 
     if (0 != status) {
         PAL_ERR(LOG_TAG, "set parameters failed status %d param_id %u", status, param_id);
+#ifndef PAL_MEMLOG_UNSUPPORTED
         kpiEnqueue(__func__, false);
+#endif
         return status;
     }
     if (param_id == PAL_PARAM_ID_STOP_BUFFERING) {
@@ -777,7 +793,9 @@ int32_t pal_stream_set_volume(pal_stream_handle_t *stream_handle,
     if (!rm->isActiveStream(stream_handle)) {
         rm->unlockActiveStream();
         status = -EINVAL;
+#ifndef PAL_MEMLOG_UNSUPPORTED
         kpiEnqueue(__func__, false);
+#endif
         return status;
     }
 
@@ -786,7 +804,9 @@ int32_t pal_stream_set_volume(pal_stream_handle_t *stream_handle,
     if (0 != status) {
         rm->unlockActiveStream();
         PAL_ERR(LOG_TAG, "failed to increase stream user count");
+#ifndef PAL_MEMLOG_UNSUPPORTED
         kpiEnqueue(__func__, false);
+#endif
         return status;
     }
     rm->unlockActiveStream();
@@ -1287,7 +1307,9 @@ int32_t pal_stream_set_device(pal_stream_handle_t *stream_handle,
         // when device is set to NONE due to removal of pluggable devices
         // send success status if stream is already inactive
         status = devices[0].id == PAL_DEVICE_NONE ? 0 : -EINVAL;
+#ifndef PAL_MEMLOG_UNSUPPORTED
         kpiEnqueue(__func__, false);
+#endif
         return status;
     }
 
@@ -1298,7 +1320,9 @@ int32_t pal_stream_set_device(pal_stream_handle_t *stream_handle,
     if (0 != status) {
         rm->unlockActiveStream();
         PAL_ERR(LOG_TAG, "failed to increase stream user count");
+#ifndef PAL_MEMLOG_UNSUPPORTED
         kpiEnqueue(__func__, false);
+#endif
         return status;
     }
     rm->unlockActiveStream();
@@ -1568,7 +1592,9 @@ int32_t pal_stream_get_mmap_position(pal_stream_handle_t *stream_handle,
     status = s->GetMmapPosition(position);
     if (0 != status) {
         PAL_ERR(LOG_TAG, "pal_stream_get_mmap_position failed with status %d", status);
+#ifndef PAL_MEMLOG_UNSUPPORTED
         kpiEnqueue(__func__, false);
+#endif
         return status;
     }
     PAL_DBG(LOG_TAG, "Exit. status %d", status);
@@ -1607,7 +1633,9 @@ int32_t pal_stream_create_mmap_buffer(pal_stream_handle_t *stream_handle,
     status = s->createMmapBuffer(min_size_frames, info);
     if (0 != status) {
         PAL_ERR(LOG_TAG, "pal_stream_create_mmap_buffer failed with status %d", status);
+#ifndef PAL_MEMLOG_UNSUPPORTED
         kpiEnqueue(__func__, false);
+#endif
         return status;
     }
     PAL_DBG(LOG_TAG, "Exit. status %d", status);
