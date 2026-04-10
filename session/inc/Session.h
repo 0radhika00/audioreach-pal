@@ -46,6 +46,7 @@
 #include "PalCommon.h"
 #include "Device.h"
 #include "PluginManager.h"
+#define TAG_VOICE_NS_RX_CONFIG  0x08001173
 
 typedef enum {
     GRAPH = 0,

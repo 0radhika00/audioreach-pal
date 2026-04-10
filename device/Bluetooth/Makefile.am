@@ -5,6 +5,8 @@ EXTRA_DIST = $(pkgconfig_DATA)
 if BUILDSYSTEM_OPENWRT
 
 AM_CPPFLAGS := -I $(top_srcdir)/device/Bluetooth/inc
+AM_CXXFLAGS := -std=c++17
+AM_CPPFLAGS += -I $(top_srcdir)/device/Bluetooth/internal
 AM_CPPFLAGS += -I $(top_srcdir)/inc
 AM_CPPFLAGS += -I $(top_srcdir)/
 AM_CPPFLAGS += -I $(top_srcdir)/utils/inc
@@ -20,7 +22,9 @@ AM_CPPFLAGS += -I $(top_srcdir)/plugins/vui_interface/api/vui-interface
 dev_bt_sources = ./src/Bluetooth.cpp
 else
 AM_CPPFLAGS := -I $(top_srcdir)/device/Bluetooth/inc
+AM_CXXFLAGS := -std=c++17
 AM_CPPFLAGS += -I $(top_srcdir)/inc
+AM_CPPFLAGS += -I $(top_srcdir)/device/Bluetooth/internal
 AM_CPPFLAGS += -I $(top_srcdir)
 AM_CPPFLAGS += -I $(top_srcdir)/utils/inc
 AM_CPPFLAGS += -I $(top_srcdir)/device/inc
