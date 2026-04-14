@@ -2115,14 +2115,15 @@ void SessionAlsaPcm::setEventPayload(uint32_t event_id, void *payload, size_t pa
 
     event->eventId = event_id;
     event->payloadSize = payload_size;
-    event->payload = calloc(1, payload_size);
-    if (!event->payload) {
-        PAL_ERR(LOG_TAG, "Memory alloc failed for eventPayload");
-        free(event);
-        return;
+    if (payload_size > 0) {
+        event->payload = calloc(1, payload_size);
+        if (!event->payload) {
+            PAL_ERR(LOG_TAG, "Memory alloc failed for eventPayload");
+            free(event);
+            return;
+        }
+        memcpy(event->payload, payload, payload_size);
     }
-
-    memcpy(event->payload, payload, payload_size);
     eventPayloadList.push_back(event);
 }
 
@@ -3026,11 +3027,25 @@ int SessionAlsaPcm::getParamWithTag(Stream *s __unused, int tagId, uint32_t para
                           PARAM_ID_ASR_OUTPUT, configSize);
             break;
         }
+        case PAL_PARAM_ID_MULTI_CLIENT_ASR_OUTPUT:
+        {
+            configSize = s->GetPayloadSize();
+            builder->payloadGetParam(s, &payloadData, &payloadSize, miid,
+                          PARAM_ID_ASR_OUTPUT_V3, configSize);
+            break;
+        }
         case PAL_PARAM_ID_SDZ_OUTPUT:
         {
             configSize = s->GetSdzPayloadSize();
             builder->payloadGetParam(s, &payloadData, &payloadSize, miid,
                           PARAM_ID_SDZ_OUTPUT, configSize);
+            break;
+        }
+        case PAL_PARAM_ID_MULTI_CLIENT_SDZ_OUTPUT:
+        {
+            configSize = s->GetSdzPayloadSize();
+            builder->payloadGetParam(s, &payloadData, &payloadSize, miid,
+                          PARAM_ID_SDZ_OUTPUT_V2, configSize);
             break;
         }
         case PAL_PARAM_ID_NMT_OUTPUT:
@@ -3181,34 +3196,43 @@ exit:
 
 void SessionAlsaPcm::freeFrontEndIds(const struct pal_stream_attributes &sAttr, int lDirection) {
 
-    if (sAttr.type == PAL_STREAM_VOICE_CALL_RECORD)
+    if (sAttr.type == PAL_STREAM_VOICE_CALL_RECORD) {
         rm->freeFrontEndIds(PCM_RECORD_NONTUNNEL, pcmDevIds);
-    else if (sAttr.type == PAL_STREAM_VOICE_CALL_MUSIC)
+        pcmDevIds.clear();
+    } else if (sAttr.type == PAL_STREAM_VOICE_CALL_MUSIC) {
         rm->freeFrontEndIds(PCM_PLAYBACK_NONTUNNEL, pcmDevIds);
-    else if (sAttr.type == PAL_STREAM_CALL_TRANSLATION) {
+        pcmDevIds.clear();
+    } else if (sAttr.type == PAL_STREAM_CALL_TRANSLATION) {
         if(sAttr.direction == PAL_AUDIO_OUTPUT)
             rm->freeFrontEndIds(PCM_PLAYBACK_NOCONFIG, pcmDevIds);
         else
             rm->freeFrontEndIds(PCM_RECORD_NOCONFIG, pcmDevIds);
-    }
-    else if (sAttr.type == PAL_STREAM_CONTEXT_PROXY || sAttr.type == PAL_STREAM_COMMON_PROXY)
+        pcmDevIds.clear();
+    } else if (sAttr.type == PAL_STREAM_CONTEXT_PROXY ||
+               sAttr.type == PAL_STREAM_COMMON_PROXY) {
         rm->freeFrontEndIds(PCM_RECORD_NOCONFIG, pcmDevIds);
-    else {
+        pcmDevIds.clear();
+    } else {
         if (sAttr.direction == PAL_AUDIO_OUTPUT) {
             if (lDirection == RX_HOSTLESS)
                 rm->freeFrontEndIds(PCM_PLAYBACK_HOSTLESS, pcmDevIds);
             else
                 rm->freeFrontEndIds(PCM_PLAYBACK, pcmDevIds);
+            pcmDevIds.clear();
         } else if (sAttr.direction == PAL_AUDIO_INPUT) {
             if (lDirection == TX_HOSTLESS)
                 rm->freeFrontEndIds(PCM_RECORD_HOSTLESS, pcmDevIds);
             else
                 rm->freeFrontEndIds(PCM_RECORD, pcmDevIds);
+            pcmDevIds.clear();
         } else {
-            if (lDirection == RX_HOSTLESS)
+            if (lDirection == RX_HOSTLESS) {
                 rm->freeFrontEndIds(PCM_PLAYBACK_HOSTLESS, pcmDevRxIds);
-            else
+                pcmDevRxIds.clear();
+            } else {
                 rm->freeFrontEndIds(PCM_RECORD_HOSTLESS, pcmDevTxIds);
+                pcmDevTxIds.clear();
+            }
         }
     }
     return;

@@ -101,6 +101,13 @@
 
 #define PARAM_ID_VOL_CTRL_MASTER_MUTE 0x08001036
 
+#define PARAM_ID_FNN_DYN_OUTPUT_TRANSITION_MODE 0x08001BA1
+struct param_id_fnn_dyn_output_transitioin_mode_t
+{
+    uint32_t enable;
+};
+typedef struct param_id_fnn_dyn_output_transitioin_mode_t param_id_fnn_dyn_output_transitioin_mode_t;
+
 #define MAX_CRS_VOL_INDEX 7
 
 struct volume_ctrl_master_gain_t
@@ -1879,7 +1886,9 @@ void PayloadBuilder::payloadGetParam(Stream* s, uint8_t **payload, size_t *size,
 
     struct apm_module_param_data_t* header;
     struct param_id_asr_output_t* asrOutputParam = NULL;
+    struct param_id_asr_output_v3_t* asrOutputParamV3 = NULL;
     param_id_sdz_output_t* sdzOutputParam = NULL;
+    param_id_sdz_output_v2_t* sdzOutputParamV2 = NULL;
     struct param_id_nmt_output_t* nmtOutputParam = NULL;
     uint8_t* payloadInfo = NULL;
     size_t payloadSize = 0, padBytes = 0;
@@ -1903,13 +1912,27 @@ void PayloadBuilder::payloadGetParam(Stream* s, uint8_t **payload, size_t *size,
                          (payloadInfo + (sizeof(struct apm_module_param_data_t)));
         asrOutputParam->output_token = s->GetOutputToken();
         asrOutputParam->num_outputs = s->GetNumEvents();
-        asrOutputParam->payload_size =  s->GetPayloadSize();
+        asrOutputParam->payload_size = s->GetPayloadSize();
+    } else if (param_id == PARAM_ID_ASR_OUTPUT_V3) {
+        asrOutputParamV3 = (struct param_id_asr_output_v3_t *)
+                         (payloadInfo + (sizeof(struct apm_module_param_data_t)));
+        asrOutputParamV3->client_id = ASR_CLIENT_HLOS;
+        asrOutputParamV3->output_token = s->GetOutputToken();
+        asrOutputParamV3->num_outputs = s->GetNumEvents();
+        asrOutputParamV3->payload_size = s->GetPayloadSize();
     } else if (param_id == PARAM_ID_SDZ_OUTPUT) {
         sdzOutputParam = (param_id_sdz_output_t *)
                          (payloadInfo + (sizeof(struct apm_module_param_data_t)));
         sdzOutputParam->output_token = s->GetSdzOutputToken();
         sdzOutputParam->num_outputs = s->GetSdzNumEvents();
-        sdzOutputParam->payload_size =  s->GetSdzPayloadSize();
+        sdzOutputParam->payload_size = s->GetSdzPayloadSize();
+    } else if (param_id == PARAM_ID_SDZ_OUTPUT_V2) {
+        sdzOutputParamV2 = (param_id_sdz_output_v2_t *)
+                         (payloadInfo + (sizeof(struct apm_module_param_data_t)));
+        sdzOutputParamV2->client_id = SDZ_CLIENT_HLOS;
+        sdzOutputParamV2->output_token = s->GetSdzOutputToken();
+        sdzOutputParamV2->num_outputs = s->GetSdzNumEvents();
+        sdzOutputParamV2->payload_size = s->GetSdzPayloadSize();
     } else if (param_id == PARAM_ID_NMT_OUTPUT) {
         nmtOutputParam = (struct param_id_nmt_output_t *)
                          (payloadInfo + (sizeof(struct apm_module_param_data_t)));
@@ -5732,5 +5755,51 @@ void PayloadBuilder::payloadJBMConfig(uint8_t** payload, size_t* size,
     *payload = payloadInfo;
 
     PAL_DBG(LOG_TAG, "customPayload address %pK and size %zu", payloadInfo,
+            *size);
+}
+
+void PayloadBuilder::payloadVoiceNsRxConfigEnableDisable(uint8_t** payload, size_t* size,
+    uint32_t miid, bool mode)
+{
+    struct apm_module_param_data_t* header = NULL;
+    uint8_t* payloadInfo = NULL;
+    uint32_t param_id = 0;
+    size_t payloadSize = 0, customPayloadSize = 0;
+    param_id_fnn_dyn_output_transitioin_mode_t *module_payload;
+
+    if (payload == NULL || size == NULL) {
+        PAL_ERR(LOG_TAG, "invalid payload or size.");
+        return;
+    }
+
+    param_id = PARAM_ID_FNN_DYN_OUTPUT_TRANSITION_MODE;
+    customPayloadSize = sizeof(param_id_fnn_dyn_output_transitioin_mode_t);
+
+    payloadSize = PAL_ALIGN_8BYTE(sizeof(struct apm_module_param_data_t)
+                                        + customPayloadSize);
+    payloadInfo = (uint8_t *)calloc(1, (size_t)payloadSize);
+    if (!payloadInfo) {
+        PAL_ERR(LOG_TAG, "failed to allocate memory.");
+        return;
+    }
+
+    header = (struct apm_module_param_data_t*)payloadInfo;
+    header->module_instance_id = miid;
+    header->param_id = param_id;
+    header->error_code = 0x0;
+    header->param_size = customPayloadSize;
+
+    module_payload =
+        (param_id_fnn_dyn_output_transitioin_mode_t *)(payloadInfo +
+         sizeof(struct apm_module_param_data_t));
+    module_payload->enable = (mode ? 1 : 0);
+    ar_mem_cpy(payloadInfo + sizeof(struct apm_module_param_data_t),
+                     customPayloadSize,
+                     module_payload,
+                     customPayloadSize);
+
+    *size = payloadSize;
+    *payload = payloadInfo;
+    PAL_DBG(LOG_TAG, "customPayload address %p and size %zu", payloadInfo,
             *size);
 }

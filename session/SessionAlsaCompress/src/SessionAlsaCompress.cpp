@@ -844,6 +844,7 @@ int SessionAlsaCompress::open(Stream * s)
                 PAL_ERR(LOG_TAG, "session alsa utils open failed with %d",
                         status);
                 rm->freeFrontEndIds(COMPRESS_PLAYBACK, compressDevIds);
+                compressDevIds.clear();
                 frontEndIdAllocated = false;
             }
             audio_fmt = sAttr.out_media_config.aud_fmt_id;
@@ -868,6 +869,7 @@ int SessionAlsaCompress::open(Stream * s)
                 PAL_ERR(LOG_TAG, "session alsa utils open failed with %d",
                         status);
                 rm->freeFrontEndIds(COMPRESS_RECORD, compressDevIds);
+                compressDevIds.clear();
                 frontEndIdAllocated = false;
             }
             audio_fmt = sAttr.in_media_config.aud_fmt_id;
@@ -1661,6 +1663,7 @@ int SessionAlsaCompress::close(Stream * s)
             }
 
             rm->freeFrontEndIds(COMPRESS_PLAYBACK, compressDevIds);
+            compressDevIds.clear();
             compress = NULL;
             builder->freeCustomPayload();
             break;
@@ -1689,6 +1692,7 @@ int SessionAlsaCompress::close(Stream * s)
                 compress_close(compress);
 
             rm->freeFrontEndIds(COMPRESS_RECORD, compressDevIds);
+            compressDevIds.clear();
             compress = NULL;
             break;
 
@@ -1954,12 +1958,8 @@ int SessionAlsaCompress::setParamWithTag(Stream *s, int tagId, uint32_t param_id
                  * again even if it comes from hal as it will not change.
                  */
                 if (isCodecConfigNeeded(audio_fmt, sAttr.direction)) {
-                    status = compress_next_track(compress);
-                    PAL_INFO(LOG_TAG, "out of compress next track, status %d", status);
-                    if (status == 0) {
-                        PAL_DBG(LOG_TAG, "Setting params for second clip for gapless");
-                        status = compress_set_codec_params(compress, &codec);
-                    }
+                    PAL_DBG(LOG_TAG, "Setting params for second clip for gapless");
+                    status = compress_set_codec_params(compress, &codec);
                 } else {
                     PAL_INFO(LOG_TAG, "No need to send params for second clip fmt %x", audio_fmt);
                 }

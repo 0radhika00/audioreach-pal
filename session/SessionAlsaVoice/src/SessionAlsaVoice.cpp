@@ -684,11 +684,11 @@ int SessionAlsaVoice::start(Stream * s)
         /*call will cache the volume but not apply it as stream has not moved to start state*/
         s->setVolume(volume);
     };
-    /*call to apply volume*/
+    /* call to apply volume CKV along with all other CKVs */
+    setConfig(s, CALIBRATION, TAG_STREAM_VOLUME, RX_HOSTLESS);
+    /* call to apply CRS volume */
     if (rm->IsCRSCallEnabled()) {
         setConfig(s, MODULE, CRS_CALL_VOLUME, RX_HOSTLESS);
-    } else {
-        setConfig(s, CALIBRATION, TAG_STREAM_VOLUME, RX_HOSTLESS);
     }
 
     if (ResourceManager::isLpiLoggingEnabled()) {
@@ -1065,6 +1065,15 @@ int SessionAlsaVoice::setParamWithTag(Stream *s, int tagId, uint32_t param_id __
             if (status) {
                 PAL_ERR(LOG_TAG, "Failed to set dtmf detection params status = %d",
                         status);
+            }
+            break;
+       }
+       case TAG_VOICE_NS_RX_CONFIG:
+       {
+            bool ns_rx_bypass_mode = *((bool *)PalPayload->payload);
+            status = enableDisableVoiceNsRxConfig(s, ns_rx_bypass_mode);
+            if (status != 0) {
+                PAL_ERR(LOG_TAG,"Failed to set voice ns module cfg");
             }
             break;
        }
@@ -1965,6 +1974,7 @@ void SessionAlsaVoice::freeFrontEndIds(const struct pal_stream_attributes &sAttr
         else if (sAttr.info.voice_call_info.VSID == VOICEMMODE2 ||
                  sAttr.info.voice_call_info.VSID == VOICELBMMODE2)
             rm->freeFrontEndIds(VOICE2_PLAYBACK_HOSTLESS, pcmDevRxIds);
+        pcmDevRxIds.clear();
     } else {
         if (sAttr.info.voice_call_info.VSID == VOICEMMODE1 ||
             sAttr.info.voice_call_info.VSID == VOICELBMMODE1)
@@ -1972,6 +1982,7 @@ void SessionAlsaVoice::freeFrontEndIds(const struct pal_stream_attributes &sAttr
         else if (sAttr.info.voice_call_info.VSID == VOICEMMODE2 ||
                  sAttr.info.voice_call_info.VSID == VOICELBMMODE2)
             rm->freeFrontEndIds(VOICE2_RECORD_HOSTLESS, pcmDevTxIds);
+        pcmDevTxIds.clear();
     }
     return;
 }
@@ -2140,5 +2151,55 @@ int SessionAlsaVoice::getRXDevice(Stream *s, std::shared_ptr<Device> &rx_dev)
     if(rx_dev == nullptr) {
         status = -EINVAL;
     }
+    return status;
+}
+
+int32_t SessionAlsaVoice::enableDisableVoiceNsRxConfig(Stream *s, bool enable)
+{
+    int status = 0;
+    std::vector<std::shared_ptr<Device>> associatedDevices;
+    uint8_t* payload = NULL;
+    size_t payloadSize = 0;
+    uint32_t miid = 0;
+    int device = 0;
+
+    PAL_ERR(LOG_TAG, "%s: Enter", __func__);
+    status = s->getAssociatedDevices(associatedDevices);
+    if ((0 != status) || (associatedDevices.size() == 0)) {
+       status = -EINVAL;
+       PAL_ERR(LOG_TAG, "getAssociatedDevices fails or empty associated devices");
+       goto exit;
+    }
+
+    rm->getBackEndNames(associatedDevices, rxAifBackEnds, txAifBackEnds);
+    if (rxAifBackEnds.empty()) {
+        status = -EINVAL;
+        PAL_ERR(LOG_TAG, "no backend specified for this stream");
+        goto exit;
+    }
+
+    if (pcmDevRxIds.size() > 0) {
+        device = pcmDevRxIds.at(0);
+        status = SessionAlsaUtils::getModuleInstanceId(mixer, device,
+                                                    rxAifBackEnds[0].second.c_str(),
+                                                    TAG_VOICE_NS_RX_CONFIG, &miid);
+        if (status != 0) {
+            status = -EINVAL;
+            PAL_ERR(LOG_TAG,"getModuleInstanceId failed status: %d", status);
+            goto exit;
+        }
+    }
+
+    builder->payloadVoiceNsRxConfigEnableDisable(&payload, &payloadSize, miid, enable);
+    if (payload && payloadSize) {
+        status = SessionAlsaUtils::setMixerParameter(mixer, device,
+                                                     payload, payloadSize);
+        PAL_INFO(LOG_TAG, "mixer set ns rx config status = %d", status);
+    }
+exit:
+    if (payload) {
+        builder->freeCustomPayload(&payload, &payloadSize);
+    }
+    PAL_DBG(LOG_TAG, "%s: Exit", __func__);
     return status;
 }

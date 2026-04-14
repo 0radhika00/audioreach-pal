@@ -51,6 +51,8 @@
 #include <regex>
 #include <system/audio.h>
 
+#include "HFPProfile.h"
+
 #define PARAM_ID_RESET_PLACEHOLDER_MODULE 0x08001173
 #define BT_IPC_SOURCE_LIB                 "btaudio_offload_if.so"
 #define BT_IPC_SOURCE_LIB2_NAME           "libbthost_if.so"
@@ -58,6 +60,8 @@
 #define MIXER_SET_FEEDBACK_CHANNEL        "BT set feedback channel"
 #define MIXER_SET_CODEC_TYPE              "BT codec type"
 #define BT_SLIMBUS_CLK_STR                "BT SLIMBUS CLK SRC"
+
+static device::bt::HFPProfile* sHFPProfile = nullptr;
 
 extern "C" void CreateBtDevice(struct pal_device *device,
                                 const std::shared_ptr<ResourceManager> rm,
@@ -196,6 +200,7 @@ bool Bluetooth::isPlaceholderEncoder()
         case CODEC_TYPE_LC3:
         case CODEC_TYPE_APTX_AD_QLEA:
         case CODEC_TYPE_APTX_AD_R4:
+        case CODEC_TYPE_APTX_PLUS:
             return false;
         case CODEC_TYPE_AAC:
             return mIsAbrEnabled ? false : true;
@@ -611,13 +616,16 @@ int Bluetooth::configureGraphModules()
         break;
     case CODEC_TYPE_LC3:
     case CODEC_TYPE_APTX_AD_QLEA:
+    case CODEC_TYPE_APTX_PLUS:
     case CODEC_TYPE_APTX_AD_R4:
-        builder->payloadLC3Config(&paramData, &paramSize, miid,
-                                  mIsLC3MonoModeOn);
-        status = checkAndUpdateCustomPayload(&paramData, &paramSize);
-        if (status) {
-            PAL_ERR(LOG_TAG, "Invalid LC3 param size");
-            goto error;
+        if (mCodecFormat != CODEC_TYPE_APTX_PLUS) {
+            builder->payloadLC3Config(&paramData, &paramSize, miid,
+                                      mIsLC3MonoModeOn);
+            status = checkAndUpdateCustomPayload(&paramData, &paramSize);
+            if (status) {
+                PAL_ERR(LOG_TAG, "Invalid LC3 param size");
+                goto error;
+            }
         }
         status = configureRATModule(pcmId, backEndName.c_str(), RAT_RENDER, false);
         if (status) {
@@ -878,6 +886,7 @@ void Bluetooth::startAbr()
     if ((mCodecFormat == CODEC_TYPE_APTX_AD_SPEECH) ||
             (mCodecFormat == CODEC_TYPE_LC3) ||
             (mCodecFormat == CODEC_TYPE_APTX_AD_QLEA) ||
+            (mCodecFormat == CODEC_TYPE_APTX_PLUS) ||
             (mCodecFormat == CODEC_TYPE_APTX_AD_R4)) {
         fbDevice.config.sample_rate = deviceAttr.config.sample_rate;
     } else {
@@ -1051,6 +1060,7 @@ void Bluetooth::startAbr()
         switch (mCodecFormat) {
         case CODEC_TYPE_LC3:
         case CODEC_TYPE_APTX_AD_QLEA:
+        case CODEC_TYPE_APTX_PLUS:
         case CODEC_TYPE_APTX_AD_R4:
             tagId = (flags == PCM_IN) ? COP_DEPACKETIZER_V2 : COP_PACKETIZER_V2;
             streamMapDir = (flags == PCM_IN) ? STREAM_MAP_IN | STREAM_MAP_OUT : STREAM_MAP_OUT;
@@ -1080,6 +1090,7 @@ void Bluetooth::startAbr()
         case CODEC_TYPE_LC3:
         case CODEC_TYPE_APTX_AD_QLEA:
         case CODEC_TYPE_APTX_AD_R4:
+        case CODEC_TYPE_APTX_PLUS:
              if (mCodecFormat == CODEC_TYPE_LC3 && isHDTEnabled && isHWSpatializerEnabled)
                 ret = configureCOPModule(mFBPcmDevIds.at(0), backEndName.c_str(), COP_DEPACKETIZER_V2, STREAM_MAP_IN | STREAM_MAP_OUT, true);
             else
@@ -1891,7 +1902,6 @@ int BtA2dp::stopPlayback()
         } else {
             ret = audio_source_stop();
         }
-
         if (ret < 0) {
             PAL_ERR(LOG_TAG, "stop stream to BT IPC lib failed");
         } else {
@@ -2316,9 +2326,14 @@ int32_t BtA2dp::setDeviceParameter(uint32_t param_id, void *param)
                 return -EINVAL;
             }
             stream = static_cast<Stream *>(activestreams[0]);
-            stream->getAssociatedSession(&session);
-            param_lc3.isLC3MonoModeOn = mIsLC3MonoModeOn;
-            session->setParameters(stream, param_id, &param_lc3);
+            //This triggers DOWNMIX_2_MONO PARAM to ENCODER,
+            //If this happens before LC3_INIT PARAM, it causes crash
+            //So send this param only if stream/graph is started
+            if (stream && stream->isActive()) {
+                stream->getAssociatedSession(&session);
+                param_lc3.isLC3MonoModeOn = mIsLC3MonoModeOn;
+                session->setParameters(stream, param_id, &param_lc3);
+            }
         }
         break;
     }
@@ -2457,6 +2472,7 @@ uint32_t BtA2dp::getLatency(uint32_t slatency)
              tunedLatency = 50;
         case CODEC_TYPE_APTX_AD_QLEA:
         case CODEC_TYPE_APTX_AD_R4:
+        case CODEC_TYPE_APTX_PLUS:
             latency += slatency;
             tunedLatency = 0;
             break;
@@ -2648,10 +2664,12 @@ audio_lc3_codec_cfg_t BtSco::sLc3CodecInfo = {};
 bool BtSco::sIsNrecEnabled = false;
 std::shared_ptr<Device> BtSco::sObjHfpRx = nullptr;
 std::shared_ptr<Device> BtSco::sObjHfpTx = nullptr;
+bool BtSco::sIsHFPSyncEnabled = true;
 
 BtSco::BtSco(struct pal_device *device, std::shared_ptr<ResourceManager> Rm)
     : Bluetooth(device, Rm)
 {
+    sHFPProfile = device::bt::HFPProfile::getInstance();
     mCodecType = (device->id == PAL_DEVICE_OUT_BLUETOOTH_SCO) ? ENC : DEC;
     mPluginHandler = NULL;
     mPluginCodec = NULL;
@@ -2694,8 +2712,33 @@ int32_t BtSco::checkAndUpdateSampleRate(uint32_t *sampleRate)
     return 0;
 }
 
+int BtSco::openBTHost() {
+    if(!sIsHFPSyncEnabled) {
+        /* HFP sync disabled. Hence, return success.*/
+        return 0;
+    }
+    if(sHFPProfile->open() != Status::OK) {
+        return -1;
+    }
+    mIsScoOn = mIsHfpOn = true;
+    return 0;
+}
+
+int BtSco::closeBTHost() {
+    if (!sIsHFPSyncEnabled) {
+        /* HFP sync disabled. Hence, return success.*/
+        return 0;
+    }
+    if (sHFPProfile->close() != Status::OK) {
+        return -1;
+    }
+    mIsScoOn = mIsHfpOn = false;
+    return 0;
+}
+
 int32_t BtSco::setDeviceParameter(uint32_t param_id, void *param)
 {
+    int status = 0;
     pal_param_btsco_t* param_bt_sco = (pal_param_btsco_t *)param;
 
     switch (param_id) {
@@ -2723,11 +2766,27 @@ int32_t BtSco::setDeviceParameter(uint32_t param_id, void *param)
         sIsNrecEnabled = param_bt_sco->bt_sco_nrec;
         PAL_DBG(LOG_TAG, "sIsNrecEnabled = %d", sIsNrecEnabled);
         break;
+    case PAL_PARAM_ID_DEVICE_CONNECTION: {
+        auto* device_connection = reinterpret_cast<pal_param_device_connection_t*>(param);
+        if (device_connection->connection_state) {
+            // open BTHOST with HFP
+            status = openBTHost();
+        } else {
+            // close BTHost with HFP
+            status = closeBTHost();
+        }
+        break;
+    }
+    case PAL_PARAM_ID_DISABLE_HFP_SYNC: {
+        sIsHFPSyncEnabled = false;
+        PAL_INFO(LOG_TAG, "HFP sync with BT Host disabled");
+        break;
+    }
     default:
         return -EINVAL;
     }
 
-    return 0;
+    return status;
 }
 
 bool BtSco::isScoNbWbActive()
@@ -2736,7 +2795,7 @@ bool BtSco::isScoNbWbActive()
 }
 
 void BtSco::convertCodecInfo(audio_lc3_codec_cfg_t &lc3CodecInfo,
-                             btsco_lc3_cfg_t &lc3Cfg)
+                             const btsco_lc3_cfg_t &lc3Cfg)
 {
     std::vector<lc3_stream_map_t> steamMapIn;
     std::vector<lc3_stream_map_t> steamMapOut;
@@ -2874,6 +2933,56 @@ int BtSco::startSwb()
     return ret;
 }
 
+void BtSco::prepareLC3Config() {
+    const btsco_lc3_cfg cfg = {.fields_map = 0,
+                               .rxconfig_index = 4,
+                               .txconfig_index = 4,
+                               .api_version = 21,
+                               .frame_duration = 0,
+                               .num_blocks = 1,
+                               .mode = 3,
+                               .streamMap = "(0, 0, M, 0, 1, M)",
+                               .vendor = "00,00,00,00,00,00,00,00,00,02,00,00,00,0A,00,00"};
+    convertCodecInfo(sLc3CodecInfo, cfg);
+}
+
+int BtSco::getCodecConfigFromBTHost() {
+    if (!sIsHFPSyncEnabled) {
+        /* HFP sync disabled. Hence, return success.*/
+        return 0;
+    }
+    auto codec = sHFPProfile->getCodec();
+    if (!codec) {
+        PAL_ERR(LOG_TAG, "failed!!");
+        return -1;
+    }
+    if (codec->mType == ::device::bt::HFPProfile::Codec::Type::LC3) {
+        sIsSwbLc3Enabled = true;
+        prepareLC3Config();
+    } else if (codec->mType == ::device::bt::HFPProfile::Codec::Type::MSBC) {
+        sIsWbSpeechEnabled = true;
+    } else if (codec->mType == ::device::bt::HFPProfile::Codec::Type::CVSD) {
+    } else if (codec->mType == ::device::bt::HFPProfile::Codec::Type::APTX_SPEECH) {
+        sSwbSpeechMode = 0;
+    } else {
+        PAL_ERR(LOG_TAG, "failed!!");
+        return -1;
+    }
+    sIsNrecEnabled = codec->mIsNRECEnabled;
+    return 0;
+}
+
+int BtSco::startBTHost() {
+    if (!sIsHFPSyncEnabled) {
+        /* HFP sync disabled. Hence, return success.*/
+        return 0;
+    }
+    if(sHFPProfile->start() != Status::OK) {
+        return -1;
+    }
+    return 0;
+}
+
 int BtSco::start()
 {
     int status = 0;
@@ -2884,6 +2993,23 @@ int BtSco::start()
 
     customPayload = NULL;
     customPayloadSize = 0;
+
+    if(status != 0) {
+        goto exit;
+    }
+
+    status = startBTHost();
+    if(status != 0) {
+        PAL_ERR(LOG_TAG, "BTHost start failed!!");
+        goto exit;
+    }
+
+    status = getCodecConfigFromBTHost();
+    if (status != 0) {
+        stopBTHost();
+        goto exit;
+    }
+    checkAndUpdateSampleRate(&deviceAttr.config.sample_rate);
 
     if (sSwbSpeechMode != SPEECH_MODE_INVALID) {
         mCodecFormat = CODEC_TYPE_APTX_AD_SPEECH;
@@ -2942,10 +3068,34 @@ exit:
     return status;
 }
 
+int BtSco::stopBTHost() {
+    if (!sIsHFPSyncEnabled) {
+        /* HFP sync disabled. Hence, return success.*/
+        return 0;
+    }
+    if(sHFPProfile->stop() != Status::OK) {
+        return -1;
+    }
+    if (!sHFPProfile->isActive()) {
+        /* HFP profile stopped*/
+        sIsSwbLc3Enabled = false;
+        sIsWbSpeechEnabled = false;
+        sSwbSpeechMode = SPEECH_MODE_INVALID;
+        sIsNrecEnabled = false;
+        PAL_INFO(LOG_TAG, " reset SCO parameters");
+    }
+    return 0;
+}
+
 int BtSco::stop()
 {
     int status = 0;
     mDeviceMutex.lock();
+
+    status = stopBTHost();
+    if(status != 0) {
+        PAL_ERR(LOG_TAG, "BTHost stop failed!!");
+    }
 
     if (mIsAbrEnabled)
         stopAbr();

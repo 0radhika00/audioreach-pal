@@ -440,6 +440,7 @@ int SessionAR::checkAndSetExtEC(const std::shared_ptr<ResourceManager>& rm,
                 dev->close();
 
                 rm->freeFrontEndIds(EXTEC_RECORD_HOSTLESS, pcmDevEcTxIds);
+                pcmDevEcTxIds.clear();
                 pcmEcTx = NULL;
                 ecRefDevId = PAL_DEVICE_OUT_MIN;
                 extECMutex.unlock();
@@ -466,6 +467,7 @@ int SessionAR::checkAndSetExtEC(const std::shared_ptr<ResourceManager>& rm,
                 PAL_ERR(LOG_TAG, "dev open failed");
                 status = -EINVAL;
                 rm->freeFrontEndIds(EXTEC_RECORD_HOSTLESS, pcmDevEcTxIds);
+                pcmDevEcTxIds.clear();
                 goto exit;
             }
             status = dev->start();
@@ -473,6 +475,7 @@ int SessionAR::checkAndSetExtEC(const std::shared_ptr<ResourceManager>& rm,
                 PAL_ERR(LOG_TAG, "dev start failed");
                 dev->close();
                 rm->freeFrontEndIds(EXTEC_RECORD_HOSTLESS, pcmDevEcTxIds);
+                pcmDevEcTxIds.clear();
                 status = -EINVAL;
                 goto exit;
             }
@@ -486,6 +489,7 @@ int SessionAR::checkAndSetExtEC(const std::shared_ptr<ResourceManager>& rm,
                 dev->stop();
                 dev->close();
                 rm->freeFrontEndIds(EXTEC_RECORD_HOSTLESS, pcmDevEcTxIds);
+                pcmDevEcTxIds.clear();
                 status = -EINVAL;
                 goto exit;
             }
@@ -495,6 +499,7 @@ int SessionAR::checkAndSetExtEC(const std::shared_ptr<ResourceManager>& rm,
                 dev->stop();
                 dev->close();
                 rm->freeFrontEndIds(EXTEC_RECORD_HOSTLESS, pcmDevEcTxIds);
+                pcmDevEcTxIds.clear();
                 status = -EINVAL;
                 goto exit;
             }
@@ -505,6 +510,7 @@ int SessionAR::checkAndSetExtEC(const std::shared_ptr<ResourceManager>& rm,
                 dev->stop();
                 dev->close();
                 rm->freeFrontEndIds(EXTEC_RECORD_HOSTLESS, pcmDevEcTxIds);
+                pcmDevEcTxIds.clear();
                 status = -EINVAL;
                 goto exit;
             }
@@ -517,6 +523,7 @@ int SessionAR::checkAndSetExtEC(const std::shared_ptr<ResourceManager>& rm,
                 dev->stop();
                 dev->close();
                 rm->freeFrontEndIds(EXTEC_RECORD_HOSTLESS, pcmDevEcTxIds);
+                pcmDevEcTxIds.clear();
                 status = -EINVAL;
                 goto exit;
             }
@@ -974,6 +981,14 @@ int SessionAR::setParameters(Stream *s, uint32_t param_id, void *payload)
                         status);
             }
             PAL_ERR(LOG_TAG, "Exit Detection case");
+            break;
+        }
+        case PAL_PARAM_ID_VOICE_NS_RX_CFG:
+        {
+            status = this->setParamWithTag(s, TAG_VOICE_NS_RX_CONFIG, param_id, payload);
+            if (status)
+                PAL_ERR(LOG_TAG, "setParamWithTag for FNN dyn transition failed with %d",
+                        status);
             break;
         }
         default:
